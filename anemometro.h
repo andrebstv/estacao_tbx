@@ -25,12 +25,13 @@ extern "C"{
 //Sensores e coisas externas
 #include "LiquidCrystal_I2C.h"
 #include "tabela_angulos.h"
-//#include "tone.h"
+#include "esp.h"
 
 
-
-
-
+enum estados_wifi {INICIALIZANDO_WIFI,CONECTANDO_NA_REDE, CONECTADO ,DESCONECTADO};
+typedef enum estados_wifi t_estados_wifi;
+enum estados_conectado { MEDINDO, TRANSMITINDO_DADOS };
+typedef enum estados_conectado t_estados_c;
 
 #ifdef __cplusplus
 extern "C" {
