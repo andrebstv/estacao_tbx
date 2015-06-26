@@ -38,8 +38,14 @@
 //==========================================================================================================//
 
 //#define ChRot_V_1				SBIT(PIND,3)
-#define SENSOR SBIT(PIND,4)
+#define SENSOR_VEL SBIT(PIND,4)
 #define LED SBIT(PORTB,5)
+
+#define SENSOR_DIR_1 (!SBIT(PINB,0))
+#define SENSOR_DIR_2 (!SBIT(PINB,2))
+#define SENSOR_DIR_3 (!SBIT(PINB,4))
+#define SENSOR_DIR_4 (!SBIT(PINB,3))
+#define SENSOR_DIR_5 (!SBIT(PINB,1))
 
 
 void io_init(void)
@@ -49,8 +55,29 @@ void io_init(void)
 	// |= Saidas (1 saida)
 	// &~ Entradas (0 entrada)
 	// Setando PORT Correpondente ativa pull up qndo entrada.
-	DDRB |= (1<<PIN5); //LED
-	DDRD &= ~(1<<PIN4);//Sensor e PULL UP
-	PORTD |= (1<<PIN4);
+
+	//Pin buzzer do teste
+	DDRC |= (1<<PIN0); //Buzzer on.
+	//LED da placa.
+	DDRB |= (1<<PIN5);
+	//Sensor de velocidade e PULL UP
+	DDRD &= ~(1<<PIN2);
+	PORTD |= (1<<PIN2);
+	//Entradas dos sensores de direçao (Biruta Eletronica)
+		//Sensor 3 (Arduino D12)
+		DDRB &= ~(1<<PIN4);
+		PORTB |= (1<<PIN4);
+		//Sensor 4 (Arduino D11)
+		DDRB &= ~(1<<PIN3);
+		PORTB |= (1<<PIN3);
+		//Sensor 2 (Arduino D10)
+		DDRB &= ~(1<<PIN2);
+		PORTB |= (1<<PIN2);
+		//Sensor 5 (Arduino D9)
+		DDRB &= ~(1<<PIN1);
+		PORTB |= (1<<PIN1);
+		//Sensor 1 (Arduino D8)
+		DDRB &= ~(1<<PIN0);
+		PORTB |= (1<<PIN0);
 
 }
