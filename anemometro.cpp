@@ -33,6 +33,7 @@ int16_t le_angulo_biruta();
 //==========================================================================================================//
 extern HardwareSerial Serial;
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+BMP085   bmp085 = BMP085();
 t_estados_wifi estado;
 t_estados_c estado_conectado = MEDINDO;
 
@@ -40,12 +41,17 @@ volatile long lastWindIRQ = 0;
 volatile byte windClicks = 0;
 long lastWindCheck = 0;
 
+float p0 = 101325;                //Pressure at sea level (Pa)
 float vel_vento;
 uint16_t direcao_vento;
-float pressao;
-float temperatura;
+long pressao = 101325;
+int32_t temperatura;
+uint8_t conta_erros, conta_conex_wifi;
 
-uint8_t conta_erros;
+
+//Variaveis de tempo e delay
+unsigned long t_led,t_update_site,t_medicao;
+
 //TODO remover essas globais
 float t, adj;
 //==========================================================================================================//
@@ -69,10 +75,14 @@ void setup()
 	/*
 	 * ========PERIFERICOS E SENSORES ============
 	 */
+	wdt_reset();
+	wdt_enable(WDTO_8S);
+	delay(2000); //Delay de startup
 	Serial.begin(9600);
 	io_init();
 	adc_init_10b();
 	lcd.init();                      // initialize the lcd
+
 
 	/*
 	 * ========INTERRUPCOES  ============
@@ -82,13 +92,16 @@ void setup()
 	/*
 	 * ========INICIALIZACOES============
 	 */
-	  delay(2000); //Delay de startup
+	  wdt_reset();
 	  lcd.backlight();
 	  lcd.print(F("Display OK"));
 	  lcd.setCursor(0,1);
 	  lcd.print(F("Display OK 2"));
 	  estado = INICIALIZANDO_WIFI;
+	  bmp085.init(MODE_ULTRA_HIGHRES, p0, false);
 	  interrupts(); //sei();
+	  LED = 1;
+	  estado = INICIALIZANDO_WIFI;
 
 }
 
@@ -122,6 +135,8 @@ void loop()
 //	if (SENSOR_DIR_2) lcd.print('1'); else lcd.print('0');
 //	if (SENSOR_DIR_1) lcd.print('1'); else lcd.print('0');
 //	lcd.print('-');
+//	estado = CONECTADO;
+	wdt_reset();
 	switch(estado)
 	{
 		case INICIALIZANDO_WIFI:
@@ -130,6 +145,7 @@ void loop()
 			lcd.print(F("INICIALIZ_WIFI"));
 #endif
 			PWR_WIFI = 1;
+			RESET_ESP = 0;
 			if (ESP_online()==OK)
 			{
 				LED = 1;
@@ -143,45 +159,53 @@ void loop()
 			lcd.clear();
 			lcd.print(F("CONECT_REDE"));
 #endif
-			if (ESP_conecta_rede()==OK) estado = CONECTADO;
+			if (ESP_conecta_rede()==OK)
+			{
+				estado = CONECTADO;
+				conta_conex_wifi = 0;
+			}
+			else
+			{
+				conta_conex_wifi++;
+				if (conta_conex_wifi >=5) estado = INICIALIZANDO_WIFI;
+			}
 			break;
 
 		case CONECTADO:
 			lcd.clear();
 			lcd.print(F("CONECTADO"));
-			delay(100);
+			lcd.setCursor(0,1);
+			lcd.print(pressao);
+			lcd.print(' ');
+			lcd.print(temperatura/10.0,2);
 
-			switch (estado_conectado)
+			wdt_reset();
+
+			if (millis() >= (T_UPDATE_VARIAVEIS+t_medicao))
 			{
-				case MEDINDO:
-					estado_conectado = TRANSMITINDO_DADOS;
-
-					//Atualizacao fake de variaveis.
-					vel_vento = 17.5;
-					direcao_vento = 180;
-					pressao = 1014.2;
-					temperatura = 32.7;
-				break;
-
-				case TRANSMITINDO_DADOS:
-					conta_erros++;
-					if (ESP_posta_dados(vel_vento, direcao_vento, pressao, temperatura)==OK)
-					{
-						conta_erros = 0;
-						estado_conectado = MEDINDO;
-						delay(5000);
-					}
-					else if (conta_erros>3) estado = INICIALIZANDO_WIFI;
-
-				break;
-
-				default: break;
+				t_medicao = millis();
+				bmp085.getPressure(&pressao);
+				pressao += 400;
+				bmp085.getTemperature(&temperatura);
+				temperatura += 10.0;
+				vel_vento = 5.5;
+				direcao_vento = 45;
+			}
+			if (millis() >= (T_UPDATE_SITE+t_update_site))
+			{
+				t_update_site = millis();
+				conta_erros++;
+				if (ESP_posta_dados(vel_vento, direcao_vento, pressao, temperatura)==OK)
+				{
+					conta_erros = 0;
+					estado_conectado = MEDINDO;
+					wdt_reset();
+					delay(5000);
+				}
+				else if (conta_erros>3) estado = INICIALIZANDO_WIFI;
 			}
 
-
-		break;
-
-
+		break; //Fim do estado CONECTADO
 
 
 		default:
@@ -189,6 +213,12 @@ void loop()
 
 	} //Fim do switch/case
 	delay(50);
+	if (millis() >= (T_PISCA_LED+t_led))
+	{
+		t_led = millis();
+		if (estado == CONECTADO) t_led+= 300;
+		LED = !LED;
+	}
 }//Fim do loop()
 
 

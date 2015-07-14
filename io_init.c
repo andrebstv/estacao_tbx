@@ -15,6 +15,8 @@ void io_init(void)
 
 	//Transistor que liga o modem.
 	DDRC |= (1<<PIN1);
+	//Transistor que da reset no modem.
+	DDRD |= (1<<PIN4);
 	//LED da placa.
 	DDRB |= (1<<PIN5);
 	//

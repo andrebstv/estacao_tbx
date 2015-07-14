@@ -26,6 +26,11 @@ extern "C"{
 #include "LiquidCrystal_I2C.h"
 #include "tabela_angulos.h"
 #include "esp.h"
+#include "BMP085.h"
+
+#define T_PISCA_LED 500
+#define T_UPDATE_VARIAVEIS 3000
+#define T_UPDATE_SITE 20000
 
 
 enum estados_wifi {INICIALIZANDO_WIFI,CONECTANDO_NA_REDE, CONECTADO ,DESCONECTADO};
