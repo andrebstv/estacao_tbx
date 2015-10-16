@@ -3,6 +3,7 @@
    Descricao: Projeto de um anemometro remoto.
 
    Usa: Interface Serial
+   	   Modulo ESP8266 para conexao WiFi
 
 
    Sensor:	Sensor hall e imas
@@ -11,6 +12,7 @@
         Atualizacoes
         	(13/02/2014)-> Primeiros testes
         	(25/06/2015) -> Implementado a mecanica do sensor de velocidade e da biruta eletronica.
+        	13/07/2015 -> ESP8266 Atualizado p/ versao nova do firmware. Melhoras significativas no boot.
 
 
  */
@@ -202,7 +204,7 @@ void loop()
 					wdt_reset();
 					delay(5000);
 				}
-				else if (conta_erros>3) estado = INICIALIZANDO_WIFI;
+				else if (conta_erros>5) estado = INICIALIZANDO_WIFI;
 			}
 
 		break; //Fim do estado CONECTADO
