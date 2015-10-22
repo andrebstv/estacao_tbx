@@ -49,6 +49,7 @@ uint16_t direcao_vento;
 long pressao = 101325;
 int32_t temperatura;
 uint8_t conta_erros, conta_conex_wifi;
+uint8_t tensao_saida;
 
 
 //Variaveis de tempo e delay
@@ -105,6 +106,11 @@ void setup()
 	  LED = 1;
 	  estado = INICIALIZANDO_WIFI;
 
+
+	  pinMode(9,OUTPUT);
+	  tensao_saida = 75;
+	  analogWrite(9,tensao_saida );
+
 }
 
 #define debug
@@ -138,7 +144,32 @@ void loop()
 //	if (SENSOR_DIR_1) lcd.print('1'); else lcd.print('0');
 //	lcd.print('-');
 //	estado = CONECTADO;
+#define TESTES
 	wdt_reset();
+	if (Serial.available()>0)
+	{
+		char temp;
+		temp = Serial.read();
+		switch(temp)
+		{
+			case '+':
+				tensao_saida++;
+				break;
+			case '-':
+				tensao_saida--;
+			break;
+			default:
+				tensao_saida = temp;
+//				Serial.print('x');
+				break;
+
+		}
+	Serial.print(tensao_saida);
+	}
+
+	analogWrite(9,tensao_saida);
+	delay(200);
+#ifndef TESTES
 	switch(estado)
 	{
 		case INICIALIZANDO_WIFI:
@@ -221,6 +252,7 @@ void loop()
 		if (estado == CONECTADO) t_led+= 300;
 		LED = !LED;
 	}
+#endif
 }//Fim do loop()
 
 
