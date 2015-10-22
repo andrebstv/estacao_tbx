@@ -29,7 +29,7 @@
 
 float get_wind_speed();
 int16_t le_angulo_biruta();
-
+uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float pressao,float temperatura);
 //==========================================================================================================//
 //										VARIAVEIS GLOBAIS
 //==========================================================================================================//
@@ -51,6 +51,15 @@ int32_t temperatura;
 uint8_t conta_erros, conta_conex_wifi;
 uint8_t tensao_saida;
 
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+
+// Set the static IP address to use if the DHCP fails to assign
+IPAddress ip(192, 168, 0, 177);
+
+// Initialize the Ethernet client library
+// with the IP address and port of the server
+// that you want to connect to (port 80 is default for HTTP):
+EthernetClient client;
 
 //Variaveis de tempo e delay
 unsigned long t_led,t_update_site,t_medicao;
@@ -78,13 +87,13 @@ void setup()
 	/*
 	 * ========PERIFERICOS E SENSORES ============
 	 */
-	wdt_reset();
-	wdt_enable(WDTO_8S);
+	//wdt_reset();
+	//wdt_enable(WDTO_8S);
 	delay(2000); //Delay de startup
 	Serial.begin(9600);
-	io_init();
+	//io_init();
 	adc_init_10b();
-	lcd.init();                      // initialize the lcd
+	//lcd.init();                      // initialize the lcd
 
 
 	/*
@@ -96,131 +105,65 @@ void setup()
 	 * ========INICIALIZACOES============
 	 */
 	  wdt_reset();
-	  lcd.backlight();
-	  lcd.print(F("Display OK"));
-	  lcd.setCursor(0,1);
-	  lcd.print(F("Display OK 2"));
-	  estado = INICIALIZANDO_WIFI;
-	  bmp085.init(MODE_ULTRA_HIGHRES, p0, false);
+	  //lcd.backlight();
+	  //lcd.print(F("Display OK"));
+	  //lcd.setCursor(0,1);
+	  //lcd.print(F("Display OK 2"));
+	  estado = INICIALIZANDO_INT_REDE;
+	  //bmp085.init(MODE_ULTRA_HIGHRES, p0, false);
 	  interrupts(); //sei();
-	  LED = 1;
-	  estado = INICIALIZANDO_WIFI;
-
-
-	  pinMode(9,OUTPUT);
-	  tensao_saida = 75;
-	  analogWrite(9,tensao_saida );
+	  Serial.println("Boot");
 
 }
 
-#define debug
-
+//#define debug
+#define debug_serial
 
 void loop()
 {
 
-	 /*
-	  * Fim do loop
-	  */
-//	lcd.clear();
-//	lcd.print(##estado);
-//	lcd.print(windClicks);
-//	lcd.print(" p/s - ADC ");
-//	lcd.print(adc_10bits(1));
-//
-//	adj = map(adc_10bits(1),5,760,100, 1000)*0.01;
-//	t = get_wind_speed();
-//	lcd.setCursor(0,1);
-//	lcd.print(t,4);
-//	lcd.print(" - ");
-//	lcd.print(adj,2);
-//	delay(1000);
-//	tone_2(600,500);
 
-//	if (SENSOR_DIR_5) lcd.print('1'); else lcd.print('0');
-//	if (SENSOR_DIR_4) lcd.print('1'); else lcd.print('0');
-//	if (SENSOR_DIR_3) lcd.print('1'); else lcd.print('0');
-//	if (SENSOR_DIR_2) lcd.print('1'); else lcd.print('0');
-//	if (SENSOR_DIR_1) lcd.print('1'); else lcd.print('0');
-//	lcd.print('-');
-//	estado = CONECTADO;
-#define TESTES
-	wdt_reset();
-	if (Serial.available()>0)
-	{
-		char temp;
-		temp = Serial.read();
-		switch(temp)
-		{
-			case '+':
-				tensao_saida++;
-				break;
-			case '-':
-				tensao_saida--;
-			break;
-			default:
-				tensao_saida = temp;
-//				Serial.print('x');
-				break;
-
-		}
-	Serial.print(tensao_saida);
-	}
-
-	analogWrite(9,tensao_saida);
-	delay(200);
 #ifndef TESTES
 	switch(estado)
 	{
-		case INICIALIZANDO_WIFI:
+		case INICIALIZANDO_INT_REDE:
 #ifdef debug
 			lcd.clear();
 			lcd.print(F("INICIALIZ_WIFI"));
 #endif
-			PWR_WIFI = 1;
-			RESET_ESP = 0;
-			if (ESP_online()==OK)
+
+			if (Ethernet.begin(mac) == OK)
 			{
 				LED = 1;
-				estado = CONECTANDO_NA_REDE;
+				estado = CONECTADO;
+#ifdef debug_serial
+				Serial.println("Conectado no Ethernet Sheld");
 			}
+			else Serial.println("Falha no Eth Shield");
+#else
+			}
+#endif
 
 		break;
 
-		case CONECTANDO_NA_REDE:
-#ifdef debug
-			lcd.clear();
-			lcd.print(F("CONECT_REDE"));
-#endif
-			if (ESP_conecta_rede()==OK)
-			{
-				estado = CONECTADO;
-				conta_conex_wifi = 0;
-			}
-			else
-			{
-				conta_conex_wifi++;
-				if (conta_conex_wifi >=5) estado = INICIALIZANDO_WIFI;
-			}
-			break;
-
 		case CONECTADO:
+#ifdef debug
 			lcd.clear();
 			lcd.print(F("CONECTADO"));
 			lcd.setCursor(0,1);
 			lcd.print(pressao);
 			lcd.print(' ');
 			lcd.print(temperatura/10.0,2);
-
+#endif
 			wdt_reset();
 
 			if (millis() >= (T_UPDATE_VARIAVEIS+t_medicao))
 			{
 				t_medicao = millis();
-				bmp085.getPressure(&pressao);
-				pressao += 400;
-				bmp085.getTemperature(&temperatura);
-				temperatura += 10.0;
+				//bmp085.getPressure(&pressao);
+//				pressao += 400;
+				//bmp085.getTemperature(&temperatura);
+//				temperatura += 10.0;
 				vel_vento = 5.5;
 				direcao_vento = 45;
 			}
@@ -228,14 +171,17 @@ void loop()
 			{
 				t_update_site = millis();
 				conta_erros++;
-				if (ESP_posta_dados(vel_vento, direcao_vento, pressao, temperatura)==OK)
+				if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura)==OK)
 				{
 					conta_erros = 0;
 					estado_conectado = MEDINDO;
 					wdt_reset();
 					delay(5000);
+#ifdef debug_serial
+					Serial.println("Dados postados online");
+#endif
 				}
-				else if (conta_erros>5) estado = INICIALIZANDO_WIFI;
+				else if (conta_erros>5) estado = INICIALIZANDO_INT_REDE;
 			}
 
 		break; //Fim do estado CONECTADO
@@ -288,3 +234,60 @@ int16_t le_angulo_biruta()
 	return angulos[index];
 }
 
+uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float pressao,float temperatura)
+{
+	//Conecta no site
+//	IPAddress ipx(192, 168, 0, 7);
+	client.clearWriteError();
+	client.stop();
+	if (client.connect("weatherstation.wunderground.com", 80)== OK)
+	//if (client.connect("rtupdate.wunderground.com", 80)== OK)
+	//if( client.connect(ipx, 80) == OK)
+	{
+#ifdef debug_serial
+	Serial.println("Conexao Site ok");
+#endif
+	}
+	else
+	{
+#ifdef debug_serial
+	Serial.println("Conexao Site ERRO");
+#endif
+	return 0;
+	}
+	wdt_reset();
+	delay(500);
+
+	client.print(F("GET /weatherstation/updateweatherstation.php?ID=IESPRITO5&PASSWORD=andref&dateutc=now&winddir="));
+	client.print(direcao_vento);
+
+	client.print(F("&windspeedmph="));
+	client.print(vel_vento/1.6,1); //Conversao para mph, apenas um digito de precisao
+
+	client.print(F("&tempf="));
+	// Conversao Fahrenheit para Celsius -> °F = °C × 1, 8 + 32, temperatura vem x10 do BMP
+	client.print((temperatura*0.18 +32.0),2);
+
+	client.print(F("&baromin="));
+	client.print(pressao*0.0295300586467*0.01,3);
+
+	client.print(F("&action=updateraw  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
+	//client.print(F("&action=updateraw&realtime=1&rtfreq=2.5  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
+
+
+	delay(1000);
+
+	if (!client.find("success"))
+	{
+#ifdef debug_serial
+		Serial.println("Post no site Falhou");
+#endif
+		return 0;
+	}
+//	while (client.available())
+//	{
+//		    char c = client.read();
+//		    Serial.print(c);
+//	}
+	return OK;
+}

@@ -32,10 +32,12 @@ extern "C"{
 
 #define T_PISCA_LED 500
 #define T_UPDATE_VARIAVEIS 3000
-#define T_UPDATE_SITE 20000
+#define T_UPDATE_SITE 2000
 
 
-enum estados_wifi {INICIALIZANDO_WIFI,CONECTANDO_NA_REDE, CONECTADO ,DESCONECTADO};
+
+
+enum estados_wifi {INICIALIZANDO_INT_REDE,CONECTANDO_NA_REDE, CONECTADO ,DESCONECTADO};
 typedef enum estados_wifi t_estados_wifi;
 enum estados_conectado { MEDINDO, TRANSMITINDO_DADOS };
 typedef enum estados_conectado t_estados_c;
