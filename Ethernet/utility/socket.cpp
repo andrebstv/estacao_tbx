@@ -1,12 +1,6 @@
 #include "w5100.h"
 #include "socket.h"
-
-#if ARDUINO >= 156 || TEENSYDUINO >= 120
-extern void yield(void);
-#else
 #define yield()
-#endif
-
 
 static uint16_t local_port;
 

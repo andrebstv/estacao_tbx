@@ -19,7 +19,6 @@
 extern "C"{
 #include "io_init.h"
 }
-
 #define OK 1
 #define SSID F("APARTAMENTO103")
 #define STRING_CONEXAO F("AT+CWJAP=\"apartamento103\",\"pituca20\"\r\n")

@@ -294,6 +294,7 @@ uint8_t DhcpClass::parseDHCPResponse(unsigned long responseTimeout, uint32_t& tr
             switch (_dhcpUdpSocket.read()) 
             {
                 case endOption :
+              	  _dhcpUdpSocket.flush(); //Conforme para evitar travadas, http://forum.arduino.cc/index.php?topic=95892.0
                     break;
                     
                 case padOption :

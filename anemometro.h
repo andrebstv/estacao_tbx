@@ -17,7 +17,6 @@
 
 //Perifericos especificos
 #include "Wire.h"
-#include <spi.h>
 extern "C"{
 #include "io_init.h"
 #include "a2d.h"
@@ -26,13 +25,21 @@ extern "C"{
 //Sensores e coisas externas
 #include "LiquidCrystal_I2C.h"
 #include "tabela_angulos.h"
-#include "esp.h"
+//#include "esp.h"
 #include "BMP085.h"
 #include "Ethernet.h"
+#include "DHT.h"
+
+#include <NewEEPROM.h>
+#include <NetEEPROM.h>
+#include <SPI.h>
+#include <Ethernet.h>
+#include <EthernetReset.h> //Para servidor de Update.
 
 #define T_PISCA_LED 500
 #define T_UPDATE_VARIAVEIS 3000
-#define T_UPDATE_SITE 2000
+#define T_UPDATE_SITE 5000
+#define OK 1
 
 
 

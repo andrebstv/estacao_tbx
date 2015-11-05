@@ -14,6 +14,12 @@
         	(25/06/2015) -> Implementado a mecanica do sensor de velocidade e da biruta eletronica.
         	13/07/2015 -> ESP8266 Atualizado p/ versao nova do firmware. Melhoras significativas no boot.
 
+        	v1.0 - 22/10/2015
+        		-> Mudanca de bootloader para permitir atualizacao remota (primeiros testes)
+        		-> Já postando online com o Ethernet Shield.
+        		-> Bootloader e webreset funcionando.
+
+
 
  */
 
@@ -29,13 +35,16 @@
 
 float get_wind_speed();
 int16_t le_angulo_biruta();
-uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float pressao,float temperatura);
+uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float pressao,float temperatura,float umidade);
 //==========================================================================================================//
 //										VARIAVEIS GLOBAIS
 //==========================================================================================================//
-extern HardwareSerial Serial;
+//extern HardwareSerial Serial;
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 BMP085   bmp085 = BMP085();
+DHT dht(3,DHT22);
+
+
 t_estados_wifi estado;
 t_estados_c estado_conectado = MEDINDO;
 
@@ -45,21 +54,23 @@ long lastWindCheck = 0;
 
 float p0 = 101325;                //Pressure at sea level (Pa)
 float vel_vento;
+float umidade;
 uint16_t direcao_vento;
 long pressao = 101325;
-int32_t temperatura;
+float temperatura;
 uint8_t conta_erros, conta_conex_wifi;
 uint8_t tensao_saida;
 
+
+EthernetClient client; //Cliente de conexao
+EthernetReset reset(8080); //Servidor de reset externo.
+//Enderecos IPs
+IPAddress ip(192, 168, 0, 60);
+IPAddress dns_google(8,8,8,8);
+IPAddress gateway_x(192,168,0,1);
+IPAddress subnet(255,255,255,0);
+//MAC Address
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-
-// Set the static IP address to use if the DHCP fails to assign
-IPAddress ip(192, 168, 0, 177);
-
-// Initialize the Ethernet client library
-// with the IP address and port of the server
-// that you want to connect to (port 80 is default for HTTP):
-EthernetClient client;
 
 //Variaveis de tempo e delay
 unsigned long t_led,t_update_site,t_medicao;
@@ -87,33 +98,35 @@ void setup()
 	/*
 	 * ========PERIFERICOS E SENSORES ============
 	 */
-	//wdt_reset();
+	wdt_reset();
+	wdt_disable();
+	wdt_reset();
 	//wdt_enable(WDTO_8S);
-	delay(2000); //Delay de startup
+
+	wdt_reset();
+	//delay(2000); //Delay de startup
 	Serial.begin(9600);
 	//io_init();
-	adc_init_10b();
+	//adc_init_10b();
 	//lcd.init();                      // initialize the lcd
 
 
 	/*
 	 * ========INTERRUPCOES  ============
 	 */
-	  attachInterrupt(0, wspeedIRQ, FALLING);
+	  //attachInterrupt(0, wspeedIRQ, FALLING);
 
 	/*
 	 * ========INICIALIZACOES============
 	 */
 	  wdt_reset();
-	  //lcd.backlight();
-	  //lcd.print(F("Display OK"));
-	  //lcd.setCursor(0,1);
-	  //lcd.print(F("Display OK 2"));
 	  estado = INICIALIZANDO_INT_REDE;
-	  //bmp085.init(MODE_ULTRA_HIGHRES, p0, false);
 	  interrupts(); //sei();
-	  Serial.println("Boot");
+	  Serial.println("Boot Y");
+	  dht.begin();
+//	  Ethernet.begin(mac,ip);
 
+	  //reset.begin();
 }
 
 //#define debug
@@ -121,25 +134,25 @@ void setup()
 
 void loop()
 {
-
+	//reset.check();
 
 #ifndef TESTES
 	switch(estado)
 	{
 		case INICIALIZANDO_INT_REDE:
-#ifdef debug
-			lcd.clear();
-			lcd.print(F("INICIALIZ_WIFI"));
-#endif
-
+			//Ethernet.begin(mac, ip, dns_google, gateway_x, subnet);
+			//Ethernet.begin(mac,ip);
+			//delay(1000);
 			if (Ethernet.begin(mac) == OK)
 			{
-				LED = 1;
+				wdt_reset();
+				//LED = 1;
 				estado = CONECTADO;
 #ifdef debug_serial
 				Serial.println("Conectado no Ethernet Sheld");
+				delay(1000);
 			}
-			else Serial.println("Falha no Eth Shield");
+			//else Serial.println("Falha no Eth Shield");
 #else
 			}
 #endif
@@ -164,19 +177,27 @@ void loop()
 //				pressao += 400;
 				//bmp085.getTemperature(&temperatura);
 //				temperatura += 10.0;
+				umidade = dht.readHumidity();
+				temperatura = dht.readTemperature();
+#ifdef debug_serial
+				Serial.println(umidade,1);
+				Serial.println(temperatura,1);
+#endif
 				vel_vento = 5.5;
 				direcao_vento = 45;
+				wdt_reset();
 			}
 			if (millis() >= (T_UPDATE_SITE+t_update_site))
 			{
+				Serial.println("Estado_Tupd");
 				t_update_site = millis();
 				conta_erros++;
-				if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura)==OK)
+				if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura,umidade)==OK)
 				{
 					conta_erros = 0;
 					estado_conectado = MEDINDO;
 					wdt_reset();
-					delay(5000);
+					//delay(5000);
 #ifdef debug_serial
 					Serial.println("Dados postados online");
 #endif
@@ -199,6 +220,7 @@ void loop()
 		LED = !LED;
 	}
 #endif
+	Serial.println("loop");
 }//Fim do loop()
 
 
@@ -234,26 +256,33 @@ int16_t le_angulo_biruta()
 	return angulos[index];
 }
 
-uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float pressao,float temperatura)
+uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float pressao,float temperatura,float umidade)
 {
 	//Conecta no site
 //	IPAddress ipx(192, 168, 0, 7);
+	static bool realtime_turn = false;
+	uint8_t resultado_da_conexao;
+	wdt_reset();
 	client.clearWriteError();
 	client.stop();
-	if (client.connect("weatherstation.wunderground.com", 80)== OK)
-	//if (client.connect("rtupdate.wunderground.com", 80)== OK)
-	//if( client.connect(ipx, 80) == OK)
+	char site[40];
+	if (realtime_turn)
+		resultado_da_conexao = client.connect("rtupdate.wunderground.com",80);
+	else
+		resultado_da_conexao = client.connect("weatherstation.wunderground.com", 80);
+
+	if (resultado_da_conexao == OK)
 	{
 #ifdef debug_serial
-	Serial.println("Conexao Site ok");
+		Serial.println("Conexao Site ok");
 #endif
 	}
 	else
 	{
 #ifdef debug_serial
-	Serial.println("Conexao Site ERRO");
+		Serial.println("Conexao Site ERRO");
 #endif
-	return 0;
+		return 0;
 	}
 	wdt_reset();
 	delay(500);
@@ -266,16 +295,31 @@ uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float 
 
 	client.print(F("&tempf="));
 	// Conversao Fahrenheit para Celsius -> °F = °C × 1, 8 + 32, temperatura vem x10 do BMP
-	client.print((temperatura*0.18 +32.0),2);
+	client.print((temperatura*1.8 +32.0),2);
 
 	client.print(F("&baromin="));
 	client.print(pressao*0.0295300586467*0.01,3);
 
-	client.print(F("&action=updateraw  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
-	//client.print(F("&action=updateraw&realtime=1&rtfreq=2.5  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
+	client.print(F("&humidity="));
+	client.print(umidade,2);
 
+	if (realtime_turn)
+	{
+		client.print(F("&action=updateraw&realtime=1&rtfreq=20.0  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
+		#ifdef debug_serial
+			Serial.println(F("RT"));
+		#endif
+	}
+	else
+	{
+		client.print(F("&action=updateraw  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
+		#ifdef debug_serial
+			Serial.println(F("CM"));
+		#endif
+	}
 
 	delay(1000);
+	wdt_reset();
 
 	if (!client.find("success"))
 	{
@@ -289,5 +333,6 @@ uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float 
 //		    char c = client.read();
 //		    Serial.print(c);
 //	}
+	realtime_turn = !realtime_turn;
 	return OK;
 }

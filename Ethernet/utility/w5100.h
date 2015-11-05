@@ -13,7 +13,7 @@
 #include <SPI.h>
 
 #define SPI_CS 10
-#define ARDUINO_ARCH_AVR
+
 #if defined(ARDUINO_ARCH_AVR)
 #define SPI_ETHERNET_SETTINGS SPISettings(4000000, MSBFIRST, SPI_MODE0)
 #else
