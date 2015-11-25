@@ -14,9 +14,9 @@
 //													SAIDAS
 //==========================================================================================================//
 
-#define LED SBIT(PORTB,5)
-#define PWR_WIFI SBIT(PORTC,1)
-#define RESET_ESP SBIT(PORTD,4)
+#define LED SBIT(PORTB,7)
+//#define PWR_WIFI SBIT(PORTC,1)
+//#define RESET_ESP SBIT(PORTD,4)
 
 //==========================================================================================================//
 //										ENTRADAS

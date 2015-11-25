@@ -13,16 +13,12 @@ void io_init(void)
 	// &~ Entradas (0 entrada)
 	// Setando PORT Correpondente ativa pull up qndo entrada.
 
-	//Transistor que liga o modem.
-	DDRC |= (1<<PIN1);
-	//Transistor que da reset no modem.
-	DDRD |= (1<<PIN4);
 	//LED da placa.
-	DDRB |= (1<<PIN5);
+	DDRB |= (1<<PIN7);
 	//
 
 
-
+/*
 	//Sensor de velocidade e PULL UP
 	DDRD &= ~(1<<PIN2);
 	PORTD |= (1<<PIN2);
@@ -42,5 +38,5 @@ void io_init(void)
 		//Sensor 1 (Arduino D8)
 		DDRB &= ~(1<<PIN0);
 		PORTB |= (1<<PIN0);
-
+*/
 }

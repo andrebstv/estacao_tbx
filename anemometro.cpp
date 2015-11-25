@@ -42,7 +42,7 @@ uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float 
 //extern HardwareSerial Serial;
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 BMP085   bmp085 = BMP085();
-DHT dht(3,DHT22);
+DHT dht(A7,DHT22);
 
 
 t_estados_wifi estado;
@@ -105,7 +105,7 @@ void setup()
 
 	wdt_reset();
 	//delay(2000); //Delay de startup
-	Serial.begin(9600);
+	Serial.begin(115200);
 	//io_init();
 	//adc_init_10b();
 	//lcd.init();                      // initialize the lcd
@@ -122,19 +122,19 @@ void setup()
 	  wdt_reset();
 	  estado = INICIALIZANDO_INT_REDE;
 	  interrupts(); //sei();
-	  Serial.println("Boot Y");
+	  Serial.println("Boot Z");
 	  dht.begin();
-//	  Ethernet.begin(mac,ip);
-
-	  //reset.begin();
+	  bmp085.init();
+	  delay(1000);
 }
 
 //#define debug
 #define debug_serial
+bool reset_check = false;
 
 void loop()
 {
-	//reset.check();
+	if (reset_check) reset.check();
 
 #ifndef TESTES
 	switch(estado)
@@ -145,8 +145,10 @@ void loop()
 			//delay(1000);
 			if (Ethernet.begin(mac) == OK)
 			{
+				delay(1000);
+				reset.begin();
+				reset_check = true;
 				wdt_reset();
-				//LED = 1;
 				estado = CONECTADO;
 #ifdef debug_serial
 				Serial.println("Conectado no Ethernet Sheld");
@@ -173,15 +175,17 @@ void loop()
 			if (millis() >= (T_UPDATE_VARIAVEIS+t_medicao))
 			{
 				t_medicao = millis();
-				//bmp085.getPressure(&pressao);
+				bmp085.getPressure(&pressao);
 //				pressao += 400;
-				//bmp085.getTemperature(&temperatura);
-//				temperatura += 10.0;
+//				bmp085.getTemperature(&temperatura);
+//				temperatura = 10.0;
 				umidade = dht.readHumidity();
+//				umidade = 1;
 				temperatura = dht.readTemperature();
 #ifdef debug_serial
-				Serial.println(umidade,1);
+				Serial.println(umidade,2);
 				Serial.println(temperatura,1);
+				Serial.println(pressao);
 #endif
 				vel_vento = 5.5;
 				direcao_vento = 45;
@@ -212,7 +216,7 @@ void loop()
 			break;
 
 	} //Fim do switch/case
-	delay(50);
+	//delay(50);
 	if (millis() >= (T_PISCA_LED+t_led))
 	{
 		t_led = millis();
@@ -220,7 +224,7 @@ void loop()
 		LED = !LED;
 	}
 #endif
-	Serial.println("loop");
+	//Serial.println("loop");
 }//Fim do loop()
 
 
@@ -305,7 +309,7 @@ uint8_t WunderWeather_posta_dados(float vel_vento, uint16_t direcao_vento,float 
 
 	if (realtime_turn)
 	{
-		client.print(F("&action=updateraw&realtime=1&rtfreq=20.0  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
+		client.print(F("&action=updateraw&realtime=1&rtfreq=2.5  HTTP/1.0\r\nHost: \r\nConnection: close\r\n\r\n"));
 		#ifdef debug_serial
 			Serial.println(F("RT"));
 		#endif
