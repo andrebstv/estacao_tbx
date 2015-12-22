@@ -15,28 +15,25 @@ void io_init(void)
 
 	//LED da placa.
 	DDRB |= (1<<PIN7);
-	//
 
-
-/*
-	//Sensor de velocidade e PULL UP
-	DDRD &= ~(1<<PIN2);
-	PORTD |= (1<<PIN2);
+	//Pino do Anemometro
+	DDRG &= ~(1<<PIN0); //Direcao
+	PORTG |= (1<<PIN0); //Pullup
 	//Entradas dos sensores de direçao (Biruta Eletronica)
-		//Sensor 3 (Arduino D12)
-		DDRB &= ~(1<<PIN4);
-		PORTB |= (1<<PIN4);
-		//Sensor 4 (Arduino D11)
-		DDRB &= ~(1<<PIN3);
-		PORTB |= (1<<PIN3);
-		//Sensor 2 (Arduino D10)
-		DDRB &= ~(1<<PIN2);
-		PORTB |= (1<<PIN2);
-		//Sensor 5 (Arduino D9)
-		DDRB &= ~(1<<PIN1);
-		PORTB |= (1<<PIN1);
-		//Sensor 1 (Arduino D8)
-		DDRB &= ~(1<<PIN0);
-		PORTB |= (1<<PIN0);
-*/
+	//Sensor 1 - Arduino 31
+	DDRC &= ~(1<<PIN6);
+	PORTC |= (1<<PIN6);
+	//Sensor 2 - Arduino 33
+	DDRC &= ~(1<<PIN4);
+	PORTC |= (1<<PIN4);
+	//Sensor 3 (Arduino 35)
+	DDRC &= ~(1<<PIN2);
+	PORTC |= (1<<PIN2);
+	//Sensor 4 (Arduino 37)
+	DDRC &= ~(1<<PIN0);
+	PORTC |= (1<<PIN0);
+	//Sensor 5 (Arduino 39)
+	DDRG &= ~(1<<PIN2);
+	PORTG |= (1<<PIN2);
+
 }

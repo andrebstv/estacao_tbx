@@ -1,5 +1,6 @@
 #include "w5100.h"
 #include "socket.h"
+#include "SPI.h"
 #define yield()
 
 static uint16_t local_port;

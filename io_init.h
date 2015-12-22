@@ -22,16 +22,14 @@
 //										ENTRADAS
 //==========================================================================================================//
 
-#define SENSOR_VEL SBIT(PIND,4)
+#define SENSOR_VEL (!SBIT(PING,0))
 
 //Biruta eletronica
-#define SENSOR_DIR_1 (!SBIT(PINB,0))
-#define SENSOR_DIR_2 (!SBIT(PINB,2))
-#define SENSOR_DIR_3 (!SBIT(PINB,4))
-#define SENSOR_DIR_4 (!SBIT(PINB,3))
-#define SENSOR_DIR_5 (!SBIT(PINB,1))
-
-
+#define SENSOR_DIR_1 (!SBIT(PINC,6)) //BVD
+#define SENSOR_DIR_2 (!SBIT(PINC,4))
+#define SENSOR_DIR_3 (!SBIT(PINC,2))
+#define SENSOR_DIR_4 (!SBIT(PINC,0))
+#define SENSOR_DIR_5 (!SBIT(PING,2))
 
 
 void io_init(void);

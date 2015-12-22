@@ -2,7 +2,7 @@
 #define ethernet_h
 
 #include <inttypes.h>
-//#include "w5100.h"
+#include "w5100.h"
 #include "IPAddress.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"

@@ -5,12 +5,8 @@
 #include <avr/wdt.h>
 #include <string.h>
 #include <Arduino.h>
-#include <NewEEPROM.h>
-#include <NetEEPROM.h>
-#include <SPI.h>
 #include <Ethernet.h>
-#include <EthernetServer.h>
-#include <EthernetClient.h>
+#include <NetEEPROM.h>
 
 #define pgm_uchar(name)   static const prog_uchar name[] PROGMEM
 

@@ -11,6 +11,8 @@
 //#include <stdlib.h>
 #include "Arduino.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
 
 #define SOCKET_NONE	255
 // Various flags and header field values for a DNS message
@@ -261,7 +263,8 @@ uint16_t DNSClient::ProcessResponse(uint16_t aTimeout, IPAddress& aAddress)
     {
         if((millis() - startTime) > aTimeout)
             return TIMED_OUT;
-        delay(50);
+//        delay(50);
+        vTaskDelay(50);
     }
 
     // We've had a reply!
