@@ -250,6 +250,10 @@ static void Task_POST(void* arg)
 					int32_t temp_temp=0;
 					bmp085.getTemperature(&temp_temp);
 					temperatura = temp_temp;
+					temperatura = temperatura/10.0;
+					Serial.println();
+					Serial.print("Temperatura =");
+					Serial.println(temperatura,1);
 	//				temperatura = 10.0;
 //					umidade = dht.readHumidity();
 	//				umidade = 1;

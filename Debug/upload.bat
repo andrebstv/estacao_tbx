@@ -1,0 +1,1 @@
+tftp -i 10.0.0.10 PUT firmware.bin
