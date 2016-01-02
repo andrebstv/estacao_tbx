@@ -76,10 +76,11 @@ void EthernetReset::begin()
 //	}
 }
 
-void EthernetReset::check()
+uint8_t EthernetReset::check()
 {	
 	/* 25 is the the maximum command lenth plus
 	 * the standart GET and HTTP prefix and postfix */
+	uint8_t flag = 0;
 	wdt_reset();
 	char http_req[strlen(_path) + 25];
 	_client = _server->available();
@@ -106,14 +107,17 @@ void EthernetReset::check()
 						stdResponce("Arduino will reset for reprogramming in 2 seconds");
 						NetEEPROM.writeImgBad();
 						watchdogReset();
-					} else stdResponce("Wrong command");
+					} else if(!strncmp(url,"dados", 5)) {
+						flag = 1;
+					}
 				} else stdResponce("Wrong path");
 				break;
 			}
 		}
 		delay(10);
 		wdt_reset();
-		_client.stop();
+//		_client.stop();
 		DBG(Serial.println("reset client disonnected");)
 	}
+		return flag;
 }

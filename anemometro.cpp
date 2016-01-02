@@ -36,7 +36,8 @@
 //==========================================================================================================//
 
 int16_t le_angulo_biruta();
-uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade);
+void resposta_dados();
+uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente);
 //==========================================================================================================//
 //										VARIAVEIS GLOBAIS
 //==========================================================================================================//
@@ -72,13 +73,14 @@ SOFT_WDT WDT_Task_Power_Management(60*2);
 BMP085   bmp085 = BMP085();
 DHT dht(A7,DHT22);
 RTC_DS1307 rtc;
+File myFile;
 
 EthernetClient client; //Cliente de conexao
 EthernetReset reset(8080); //Servidor de reset externo.
 //Enderecos IPs
-IPAddress ip(192, 168, 0, 60);
-IPAddress dns_google(8,8,8,8);
-IPAddress gateway_x(192,168,0,1);
+IPAddress ip(10, 0, 0, 11);
+IPAddress dns_google(10,0,0,1);
+IPAddress gateway_x(10,0,0,1);
 IPAddress subnet(255,255,255,0);
 //MAC Address
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
@@ -117,10 +119,10 @@ void Task_Anemometro(void* arg)
 	for(;;)
 	{
 		direcao_vento = le_angulo_biruta();
-		vel_vento = windClicks * FATOR_DE_ANEMOMETRO;
+		vel_vento = vel_vento*FATOR_DE_FILTRAGEM_VENTO + windClicks *FATOR_DE_ANEMOMETRO*(1.0-FATOR_DE_FILTRAGEM_VENTO);
 		Serial.println();
 		Serial.print("VelVento = ");
-		Serial.print(windClicks*FATOR_DE_ANEMOMETRO,1);
+		Serial.print(vel_vento,1);
 		Serial.print("/");
 		Serial.println(direcao_vento);
 		Serial.flush();
@@ -170,10 +172,11 @@ static void Task_LED(void* arg)
 			//Algo travou, reset geral
 			Serial.println(" WDT Reboot");
 			Serial.flush();
+			grava_dados_SD("Reboot",rtc,myFile);
 			vTaskDelay(100);
 			cli();
 			wdt_enable(WDTO_1S);
-			for(;;);
+			for(;;) WIZNET_RST = 0;
 		}
 		vTaskDelayUntil(&xLastWakeTime,500);
 	}
@@ -204,23 +207,28 @@ static void Task_POST(void* arg)
 	for(;;)
 	{
 
-		if (reset_check) reset.check();
-		if (conta_erros_shield < 3)
+		// Check de Dados, servidor de reset e upload.
+		if (reset_check) {
+			if (reset.check() ==1)
+			{
+				resposta_dados();
+			}
+			if (reset._client) reset._client.stop();
+		}
+
+
+		if (conta_erros_shield < 15)
 			{
 				WDT_Task_POST.reset(); //Previne uma zica brava.
 			}
-		//TODO checar pq nao reseta
-
-
 	#ifndef TESTES
 
 		switch(estado)
 		{
 			case INICIALIZANDO_INT_REDE:
-				//Ethernet.begin(mac, ip, dns_google, gateway_x, subnet);
-				//Ethernet.begin(mac,ip);
-				//delay(1000);
-				if (Ethernet.begin(mac) == OK)
+
+//				if (Ethernet.begin(mac) == OK)
+				Ethernet.begin(mac,ip,dns_google,gateway_x,subnet);
 				{
 					vTaskDelay(1000);
 					reset.begin();
@@ -229,12 +237,13 @@ static void Task_POST(void* arg)
 					estado = CONECTADO;
 	#ifdef debug_serial
 					Serial.println("Conectado no Ethernet Sheld");
+					grava_dados_SD("Ethernet Iniciado",rtc,myFile);
 					vTaskDelay(1000);
 				}
-				else
-					{
-						conta_erros_shield++;
-					}
+//				else
+//				{
+//					conta_erros_shield++;
+//				}
 
 				//else Serial.println("Falha no Eth Shield");
 	#endif
@@ -256,7 +265,7 @@ static void Task_POST(void* arg)
 					Serial.println(temperatura,1);
 	//				temperatura = 10.0;
 //					umidade = dht.readHumidity();
-	//				umidade = 1;
+					umidade = 60;
 //					temperatura = dht.readTemperature();
 					direcao_vento = le_angulo_biruta();
 	#ifdef debug_serial
@@ -273,18 +282,20 @@ static void Task_POST(void* arg)
 					Serial.println("Estado_Tupd");
 					t_update_site = millis();
 					conta_erros++;
-					if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura,vpainel)==OK)
+					if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura,umidade,vpainel,corrente_painel)==OK)
 					{
 						conta_erros = 0;
 						estado_conectado = MEDINDO;
 	#ifdef debug_serial
 						Serial.println("Dados postados online ");
+						grava_dados_SD("Dados postados Online",rtc,myFile);
 	#endif
 					}
 					else if (conta_erros >5 )
 						{
 							estado = INICIALIZANDO_INT_REDE;
-							conta_erros = 0;
+//							conta_erros = 0;
+							grava_dados_SD("Reset int rede",rtc,myFile);
 						}
 				}
 
@@ -320,6 +331,7 @@ void setup()
 	//delay(2000); //Delay de startup
 	Serial.begin(115200);
 	io_init();
+	WIZNET_RST = 1;
 	adc_init_10b();
 	//lcd.init();                      // initialize the lcd
 
@@ -340,6 +352,17 @@ void setup()
 	  rtc.begin();
 
 	  portBASE_TYPE s1, s2,s3,s4,s5;
+
+	   pinMode(10, OUTPUT); // Necessário p/ a interface SPI funcionar.
+	  if (!SD.begin(CS_SDCARD)) {
+	    /*
+	     *TODO Incluir aqui rotina de falha de inicializacao do SD Card
+	     */
+	  }
+	  char logname[8];
+	  sprintf(logname,"L%u%u%u.txt",rtc.now().day(),rtc.now().month(),rtc.now().year()%100);
+	  myFile = SD.open(logname, FILE_WRITE);
+	  grava_dados_SD("POWER ON",rtc,myFile);
 
 	  // Task que vai piscar o LED
 	  s1 = xTaskCreate(Task_LED, NULL, configMINIMAL_STACK_SIZE, NULL, TASK_LED_PRIORITY, NULL);
@@ -404,7 +427,7 @@ int16_t le_angulo_biruta()
 }
 
 
-uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade)
+uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente)
 {
 	//Conecta no site
 //	IPAddress ipx(192, 168, 0, 7);
@@ -433,21 +456,34 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 	}
 	vTaskDelay(500);
 
+	//Direcao do Vento
 	client.print(F("GET /weatherstation/updateweatherstation.php?ID=IESPRITO5&PASSWORD=andref&dateutc=now&winddir="));
 	client.print(direcao_vento);
 
+	//Velocidade do Vento
 	client.print(F("&windspeedmph="));
 	client.print(vel_vento/1.6,1); //Conversao para mph, apenas um digito de precisao
 
+	//Temperatura da estacao
 	client.print(F("&tempf="));
 	// Conversao Fahrenheit para Celsius -> °F = °C × 1, 8 + 32, temperatura vem x10 do BMP
 	client.print((temperatura*1.8 +32.0),2);
 
+	//Pressao Barometrica
 	client.print(F("&baromin="));
 	client.print(pressao*0.0295300586467*0.01,3);
 
+	//umidade
 	client.print(F("&humidity="));
 	client.print(umidade,2);
+
+	//Tensao do Painel Solar
+	client.print(F("&dewptf="));
+	client.print((vpainel*1.8 +32.0),2);
+	//Corrente do painel.
+	client.print(F("&soiltempf2="));
+	client.print((corrente*1.8 +32.0),2);
+
 
 	if (realtime_turn)
 	{
@@ -481,3 +517,51 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 	realtime_turn = !realtime_turn;
 	return OK;
 }
+void resposta_dados()
+{
+	reset._client.println("HTTP/1.1 200 OK");
+	reset._client.println("Content-Type: text/html");
+	reset._client.println("Connnection: close");
+	reset._client.println();
+	reset._client.println("<!DOCTYPE HTML>");
+	reset._client.println("<html>");
+	reset._client.println("Dados:<br>Tensao do Painel:");
+		reset._client.print(vpainel,2);
+		reset._client.print("<br>Corrente:");
+		reset._client.print(corrente_painel,2);
+		reset._client.print("<br>Horario:");
+		reset._client.print(rtc.now().hour());reset._client.print(":");
+		reset._client.print(rtc.now().minute());reset._client.print(":");
+		reset._client.print(rtc.now().second());
+		reset._client.print("<br>Vento:");
+		reset._client.print(vel_vento,1);
+		reset._client.print(" / Direcao:");
+		reset._client.print(direcao_vento);
+	reset._client.println("<br><br></html>");
+	reset._client.flush();
+	reset._client.stop();
+}
+void resposta_log(EthernetClient &cliente)
+{
+
+}
+void grava_dados_SD (char *palavra, RTC_DS1307 &rtc_log, File &Log)
+{
+		     Log.print(rtc_log.now().day(), DEC);
+		     Log.print('/');
+		     Log.print(rtc_log.now().month(), DEC);
+		     Log.print('/');
+		     Log.print(rtc_log.now().year(), DEC);
+		     Log.print(' ');
+		     Log.print(rtc_log.now().hour(), DEC);
+		     Log.print(':');
+		     Log.print(rtc_log.now().minute(), DEC);
+		     Log.print(':');
+		     Log.print(rtc_log.now().second(), DEC);
+		     Log.print(',');
+		     //Imprime os dados
+		     Log.println(palavra);
+		     //Grava no SDCARD
+		     Log.flush();
+}
+

@@ -16,6 +16,9 @@ void io_init(void)
 	//LED da placa.
 	DDRB |= (1<<PIN7);
 
+	//Reset do modulo Ethernet
+	DDRF |=(1<<PIN0);
+
 	//Pino do Anemometro
 	DDRG &= ~(1<<PIN0); //Direcao
 	PORTG |= (1<<PIN0); //Pullup

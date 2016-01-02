@@ -15,6 +15,7 @@
 //==========================================================================================================//
 
 #define LED SBIT(PORTB,7)
+#define WIZNET_RST SBIT(PORTF,0)
 //#define PWR_WIFI SBIT(PORTC,1)
 //#define RESET_ESP SBIT(PORTD,4)
 

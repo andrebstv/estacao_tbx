@@ -21,7 +21,6 @@ class EthernetReset
 {
 	private:
 		EthernetServer* _server;
-		EthernetClient _client;
 		char _path[20];
 
 		void stdResponce(char* msg);
@@ -29,11 +28,12 @@ class EthernetReset
 		void stop(void);
 
 	public:
+		EthernetClient _client;
 		EthernetReset(int port);
 		//~EthernetReset();
 
 		void begin(void);
-		void check(void);
+		uint8_t check(void);
 };
 
 #endif

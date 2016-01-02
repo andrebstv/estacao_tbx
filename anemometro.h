@@ -40,6 +40,7 @@ extern "C"{
 #include "Ethernet.h"
 #include <EthernetReset.h> //Para servidor de Update.
 #include <FreeRTOS_AVR.h>
+#include "SD.h"
 
 #define T_PISCA_LED 500
 #define T_UPDATE_VARIAVEIS 4000
@@ -54,7 +55,11 @@ extern "C"{
 #define TASK_PWR_MANAGEMENT_PRIORITY (configMAX_PRIORITIES-4)
 
 #define FATOR_DE_ANEMOMETRO 1.56
+#define FATOR_DE_FILTRAGEM_VENTO 0.85
 extern RTC_DS1307 rtc;
+
+extern File myFile;
+#define CS_SDCARD 4
 
 enum estados_wifi {INICIALIZANDO_INT_REDE,CONECTANDO_NA_REDE, CONECTADO ,DESCONECTADO};
 typedef enum estados_wifi t_estados_wifi;
@@ -65,6 +70,7 @@ extern "C" {
 #endif
 void loop();
 void setup();
+void grava_dados_SD (char *palavra, RTC_DS1307 &rtc_log, File &Log);
 #ifdef __cplusplus
 } // extern "C"
 #endif
