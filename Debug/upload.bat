@@ -1,1 +1,1 @@
-tftp -i 10.0.0.10 PUT firmware.bin
+tftp -i 192.168.10.110 PUT firmware.bin

@@ -101,11 +101,7 @@ uint8_t EthernetReset::check()
 				if(!strncmp(url, _path,strlen(_path))) {
 					url += (strlen(_path) + 1);
 					if(!strncmp(url, "reset", 5)) {
-						stdResponce("Arduino will be doing a normal reset in 2 seconds");
-						watchdogReset();
-					} else if(!strncmp(url,"reprogram", 9)) {
-						stdResponce("Arduino will reset for reprogramming in 2 seconds");
-						NetEEPROM.writeImgBad();
+						stdResponce("Estacao reiniciando em 2 segundos");
 						watchdogReset();
 					} else if(!strncmp(url,"dados", 5)) {
 						flag = 1;

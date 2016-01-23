@@ -20,6 +20,8 @@
         		-> Bootloader e webreset funcionando.
         	v1.3 - 22/12/2015
         		-> Deploy em Timbuix, adicionado ajuste de angulo de biruta
+        	v1.4 - 23/01/2015
+        		-> Bateria nova, updates de rajadas e velocidade do vento filtrada.
 
 
 
@@ -37,7 +39,8 @@
 
 int16_t le_angulo_biruta();
 void resposta_dados();
-uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente);
+uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente, float rajada);
+float retorna_max_vento(float *array, uint8_t n);
 //==========================================================================================================//
 //										VARIAVEIS GLOBAIS
 //==========================================================================================================//
@@ -56,10 +59,12 @@ volatile byte windClicks = 0;
 float vel_vento;
 float umidade;
 float vbat,corrente_painel,vpainel;
+float array_de_rajadas[(TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD)];
+float rajada;
 int16_t direcao_vento;
 long pressao = 101325;
 float temperatura;
-volatile uint8_t conta_erros,conta_erros_shield;
+volatile uint8_t conta_erros,conta_inicializacoes_de_rede;
 volatile bool reset_check = false;
 uint8_t tensao_saida;
 
@@ -78,12 +83,14 @@ File myFile;
 EthernetClient client; //Cliente de conexao
 EthernetReset reset(8080); //Servidor de reset externo.
 //Enderecos IPs
-IPAddress ip(10, 0, 0, 11);
-IPAddress dns_google(10,0,0,1);
-IPAddress gateway_x(10,0,0,1);
+IPAddress ip_reporte(192, 168, 10, 111);
+IPAddress ip_upload_firmware(192, 168, 10, 110);
+IPAddress dns_google(200,175,5,139);
+IPAddress gateway_x(192,168,10,1);
 IPAddress subnet(255,255,255,0);
 //MAC Address
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte  mac_update[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
 
 //Variaveis de tempo e delay
 //TODO Colocar na API do FreeRTOS
@@ -126,11 +133,19 @@ void Task_Anemometro(void* arg)
 		Serial.print("/");
 		Serial.println(direcao_vento);
 		Serial.flush();
-		windClicks = 0;
 
+		for (uint8_t i=1; i< (TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD);i++)
+		{
+			array_de_rajadas[i-1] = array_de_rajadas[i];
+		}
+		array_de_rajadas[((TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD)-1)] = windClicks *FATOR_DE_ANEMOMETRO;
+		rajada = retorna_max_vento(array_de_rajadas,(TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD));
+
+		windClicks = 0; //Zera para a proxima contagem.
+//		rajada = retorna_max_vento(array_de_rajadas,3);
 		//Fim da Task
 		WDT_Task_Anemometro.reset();
-		vTaskDelayUntil(&xLastWakeTime,3000);
+		vTaskDelayUntil(&xLastWakeTime,TASK_ANEMOMETRO_PERIOD);
 
 	}
 }
@@ -202,7 +217,7 @@ extern "C" {
 static void Task_POST(void* arg)
 {
 
-	conta_erros_shield = 0;
+	conta_inicializacoes_de_rede = 0;
 	conta_erros = 0;
 	for(;;)
 	{
@@ -217,7 +232,7 @@ static void Task_POST(void* arg)
 		}
 
 
-		if (conta_erros_shield < 15)
+		if (conta_inicializacoes_de_rede <= 10)
 			{
 				WDT_Task_POST.reset(); //Previne uma zica brava.
 			}
@@ -228,12 +243,12 @@ static void Task_POST(void* arg)
 			case INICIALIZANDO_INT_REDE:
 
 //				if (Ethernet.begin(mac) == OK)
-				Ethernet.begin(mac,ip,dns_google,gateway_x,subnet);
+				Ethernet.begin(mac,ip_reporte,dns_google,gateway_x,subnet);
 				{
 					vTaskDelay(1000);
 					reset.begin();
 					reset_check = true;
-					conta_erros_shield = 0;
+//					conta_inicializacoes_de_rede = 0;
 					estado = CONECTADO;
 	#ifdef debug_serial
 					Serial.println("Conectado no Ethernet Sheld");
@@ -242,7 +257,7 @@ static void Task_POST(void* arg)
 				}
 //				else
 //				{
-//					conta_erros_shield++;
+					conta_inicializacoes_de_rede++;
 //				}
 
 				//else Serial.println("Falha no Eth Shield");
@@ -282,9 +297,10 @@ static void Task_POST(void* arg)
 					Serial.println("Estado_Tupd");
 					t_update_site = millis();
 					conta_erros++;
-					if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura,umidade,vpainel,corrente_painel)==OK)
+					if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura,umidade,vpainel,corrente_painel,rajada)==OK)
 					{
 						conta_erros = 0;
+						conta_inicializacoes_de_rede = 0;
 						estado_conectado = MEDINDO;
 	#ifdef debug_serial
 						Serial.println("Dados postados online ");
@@ -294,7 +310,7 @@ static void Task_POST(void* arg)
 					else if (conta_erros >5 )
 						{
 							estado = INICIALIZANDO_INT_REDE;
-//							conta_erros = 0;
+							conta_erros = 0;
 							grava_dados_SD("Reset int rede",rtc,myFile);
 						}
 				}
@@ -326,7 +342,7 @@ void setup()
 	wdt_disable();
 	wdt_reset();
 	wdt_enable(WDTO_8S);
-
+//	rtc.adjust(DateTime(__DATE__, "15:00:00"));
 	wdt_reset();
 	//delay(2000); //Delay de startup
 	Serial.begin(115200);
@@ -352,6 +368,8 @@ void setup()
 	  rtc.begin();
 
 	  portBASE_TYPE s1, s2,s3,s4,s5;
+//	  word port = 8081;
+//	  NetEEPROM.writeNet(mac_update, ip_upload_firmware, gateway_x, subnet);
 
 	   pinMode(10, OUTPUT); // Necessário p/ a interface SPI funcionar.
 	  if (!SD.begin(CS_SDCARD)) {
@@ -400,7 +418,7 @@ void loop()
 
 int16_t le_angulo_biruta()
 {
-#define ANGULO_DE_AJUSTE 186
+#define ANGULO_DE_AJUSTE 228
 	int16_t angulo_temp=0;
 	uint8_t index=0;
 	if (SENSOR_DIR_1) index+=1;
@@ -427,7 +445,7 @@ int16_t le_angulo_biruta()
 }
 
 
-uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente)
+uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente, float rajada)
 {
 	//Conecta no site
 //	IPAddress ipx(192, 168, 0, 7);
@@ -463,6 +481,10 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 	//Velocidade do Vento
 	client.print(F("&windspeedmph="));
 	client.print(vel_vento/1.6,1); //Conversao para mph, apenas um digito de precisao
+
+	//Rajada do Vento
+	client.print(F("&windgustmph="));
+	client.print(rajada/1.6,1); //Conversao para mph, apenas um digito de precisao
 
 	//Temperatura da estacao
 	client.print(F("&tempf="));
@@ -519,25 +541,27 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 }
 void resposta_dados()
 {
-	reset._client.println("HTTP/1.1 200 OK");
-	reset._client.println("Content-Type: text/html");
-	reset._client.println("Connnection: close");
+	reset._client.println(F("HTTP/1.1 200 OK"));
+	reset._client.println(F("Content-Type: text/html"));
+	reset._client.println(F("Connnection: close"));
 	reset._client.println();
-	reset._client.println("<!DOCTYPE HTML>");
-	reset._client.println("<html>");
-	reset._client.println("Dados:<br>Tensao do Painel:");
+	reset._client.println(F("<!DOCTYPE HTML>"));
+	reset._client.println(F("<html>"));
+	reset._client.println(F("Dados:<br>Tensao do Painel:"));
 		reset._client.print(vpainel,2);
-		reset._client.print("<br>Corrente:");
+		reset._client.print(F("<br>Corrente:"));
 		reset._client.print(corrente_painel,2);
-		reset._client.print("<br>Horario:");
+		reset._client.print(F("<br>Horario:"));
 		reset._client.print(rtc.now().hour());reset._client.print(":");
 		reset._client.print(rtc.now().minute());reset._client.print(":");
 		reset._client.print(rtc.now().second());
-		reset._client.print("<br>Vento:");
+		reset._client.print(F("<br>Vento:"));
 		reset._client.print(vel_vento,1);
-		reset._client.print(" / Direcao:");
+		reset._client.print(F(" / Direcao:"));
 		reset._client.print(direcao_vento);
-	reset._client.println("<br><br></html>");
+		reset._client.print(F("<br>Rajada (2 min):"));
+		reset._client.print(rajada,1);
+	reset._client.println(F("<br><br></html>"));
 	reset._client.flush();
 	reset._client.stop();
 }
@@ -564,4 +588,13 @@ void grava_dados_SD (char *palavra, RTC_DS1307 &rtc_log, File &Log)
 		     //Grava no SDCARD
 		     Log.flush();
 }
-
+float retorna_max_vento(float *array, uint8_t n)
+{
+	float max_temp = -1000.0;
+	for (uint8_t i = 0; i<n; i++)
+	{
+		if (*array > max_temp) max_temp = *array;
+		array++;
+	}
+	return max_temp;
+}
