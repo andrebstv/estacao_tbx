@@ -14,8 +14,10 @@
 #include <stdlib.h>
 #include <fontebig.h>
 #include <desenhos.h>
+#include "wunderground.h"
+
 extern PCD8544 TelaLCD;
 extern RTC_DS1307 rtc;
 
-void updateLCD(long pressao,int16_t angulo,float vvento,float cpainel, float vpnl);
+void updateLCD(ST_dados_metereologicos *dadosm, float cpainel, float vpnl);
 #endif /* TELA_H_ */

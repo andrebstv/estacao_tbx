@@ -19,10 +19,9 @@
 
 class EthernetReset
 {
-	private:
+	protected:
 		EthernetServer* _server;
 		char _path[20];
-
 		void stdResponce(char* msg);
 		void watchdogReset();
 		void stop(void);

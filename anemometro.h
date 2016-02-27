@@ -33,6 +33,7 @@ extern "C"{
 #include "Ethernet.h"
 #include "DHT.h"
 #include "soft_wdt.h"
+#include "server_aux.h"
 
 #include "NewEEPROM.h"
 #include "NetEEPROM.h"
@@ -41,10 +42,11 @@ extern "C"{
 #include <EthernetReset.h> //Para servidor de Update.
 #include <FreeRTOS_AVR.h>
 #include "SD.h"
+#include "wunderground.h"
 
 #define T_PISCA_LED 500
 #define T_UPDATE_VARIAVEIS 4000
-#define T_UPDATE_SITE 5000
+#define T_UPDATE_SITE 15000
 #define T_UPDATE_LCD 1000
 #define TASK_ANEMOMETRO_PERIOD 3000
 #define TEMPO_MEDICAO_RAJADA 120000
@@ -67,6 +69,9 @@ enum estados_wifi {INICIALIZANDO_INT_REDE,CONECTANDO_NA_REDE, CONECTADO ,DESCONE
 typedef enum estados_wifi t_estados_wifi;
 enum estados_conectado { MEDINDO, TRANSMITINDO_DADOS };
 typedef enum estados_conectado t_estados_c;
+
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
