@@ -12,7 +12,7 @@ PCD8544 TelaLCD = PCD8544(44, 46, 42, 40, 48);
 enum telas { TELA_ANGULO_VP, TELA_NOME_IP, TELA_ANGULO_IP, TELA_NOME_VP};
 enum telas tela_atual;
 
-void updateLCD(long pressao,int16_t angulo,float vvento,float cpainel, float vpnl)
+void updateLCD(ST_dados_metereologicos *dadosm, float cpainel, float vpnl)
 {
 
 	TelaLCD.clear();
@@ -20,24 +20,22 @@ void updateLCD(long pressao,int16_t angulo,float vvento,float cpainel, float vpn
 	char Buffer_txt[4] = "  ";
 	if ((tela_atual == TELA_NOME_IP) || (tela_atual == TELA_NOME_VP))
 	{
-		if (angulo<24) strcpy_P(Buffer_txt,PSTR("N"));
-		if ((angulo>=24) && (angulo<=36)) strcpy_P(Buffer_txt,PSTR("NNE"));
-		if ((angulo>=48) && (angulo<=60)) strcpy_P(Buffer_txt,PSTR("NE "));
-		if ((angulo>=72) && (angulo<=84)) strcpy_P(Buffer_txt,PSTR("ENE"));
-		if ((angulo>=96) && (angulo<=108)) strcpy_P(Buffer_txt,PSTR(" E "));
-		if ((angulo>=120) && (angulo<=132)) strcpy_P(Buffer_txt,PSTR("ESE"));
-		if ((angulo>=144) && (angulo<=156)) strcpy_P(Buffer_txt,PSTR("SE "));
-		if (angulo==168)  strcpy_P(Buffer_txt,PSTR("SSE"));
-		if ((angulo>=180) && (angulo<=192)) strcpy_P(Buffer_txt,PSTR(" S "));
-		if ((angulo>=204) && (angulo<=216)) strcpy_P(Buffer_txt,PSTR("SSO"));
-		if ((angulo>=228) && (angulo<=240)) strcpy_P(Buffer_txt,PSTR("SO "));
-		if ((angulo>=252) && (angulo<=264)) strcpy_P(Buffer_txt,PSTR("OSO"));
-		if ((angulo>=276) && (angulo<=288)) strcpy_P(Buffer_txt,PSTR(" O "));
-		if ((angulo>=300) && (angulo<=312)) strcpy_P(Buffer_txt,PSTR("ONO"));
-		if ((angulo>=324) && (angulo<=336)) strcpy_P(Buffer_txt,PSTR("NO "));
-		if (angulo==348)  strcpy_P(Buffer_txt,PSTR("NNO"));
-
-		//Imprimindo direcao do vento.
+		if ((*dadosm).direcao_vento<24) strcpy_P(Buffer_txt,PSTR("N"));
+		if (((*dadosm).direcao_vento>=24) && ((*dadosm).direcao_vento<=36)) strcpy_P(Buffer_txt,PSTR("NNE"));
+		if (((*dadosm).direcao_vento>=48) && ((*dadosm).direcao_vento<=60)) strcpy_P(Buffer_txt,PSTR("NE "));
+		if (((*dadosm).direcao_vento>=72) && ((*dadosm).direcao_vento<=84)) strcpy_P(Buffer_txt,PSTR("ENE"));
+		if (((*dadosm).direcao_vento>=96) && ((*dadosm).direcao_vento<=108)) strcpy_P(Buffer_txt,PSTR(" E "));
+		if (((*dadosm).direcao_vento>=120) && ((*dadosm).direcao_vento<=132)) strcpy_P(Buffer_txt,PSTR("ESE"));
+		if (((*dadosm).direcao_vento>=144) && ((*dadosm).direcao_vento<=156)) strcpy_P(Buffer_txt,PSTR("SE "));
+		if ((*dadosm).direcao_vento==168)  strcpy_P(Buffer_txt,PSTR("SSE"));
+		if (((*dadosm).direcao_vento>=180) && ((*dadosm).direcao_vento<=192)) strcpy_P(Buffer_txt,PSTR(" S "));
+		if (((*dadosm).direcao_vento>=204) && ((*dadosm).direcao_vento<=216)) strcpy_P(Buffer_txt,PSTR("SSO"));
+		if (((*dadosm).direcao_vento>=228) && ((*dadosm).direcao_vento<=240)) strcpy_P(Buffer_txt,PSTR("SO "));
+		if (((*dadosm).direcao_vento>=252) && ((*dadosm).direcao_vento<=264)) strcpy_P(Buffer_txt,PSTR("OSO"));
+		if (((*dadosm).direcao_vento>=276) && ((*dadosm).direcao_vento<=288)) strcpy_P(Buffer_txt,PSTR(" O "));
+		if (((*dadosm).direcao_vento>=300) && ((*dadosm).direcao_vento<=312)) strcpy_P(Buffer_txt,PSTR("ONO"));
+		if (((*dadosm).direcao_vento>=324) && ((*dadosm).direcao_vento<=336)) strcpy_P(Buffer_txt,PSTR("NO "));
+		if ((*dadosm).direcao_vento==348)  strcpy_P(Buffer_txt,PSTR("NNO"));	//Imprimindo direcao do vento.
 		TelaLCD.setCursor(0,1);
 		TelaLCD.imprime_grande(Buffer_txt);
 		TelaLCD.setCursor(64,5);
@@ -45,7 +43,7 @@ void updateLCD(long pressao,int16_t angulo,float vvento,float cpainel, float vpn
 	}
 	else
 	{
-		itoa(angulo,Buffer_txt,10);
+		itoa((*dadosm).direcao_vento,Buffer_txt,10);
 		TelaLCD.setCursor(0,1);
 		TelaLCD.imprime_grande(Buffer_txt);
 		TelaLCD.setCursor(64,5);
@@ -54,19 +52,19 @@ void updateLCD(long pressao,int16_t angulo,float vvento,float cpainel, float vpn
 	//Imprimindo Velocidade
 	TelaLCD.drawline(34,14,39,1,BLACK);
 	TelaLCD.setCursor(41,0);
-	itoa(vvento,Buffer_txt,10);
+	itoa(dadosm->vel_vento,Buffer_txt,10);
 	TelaLCD.imprime_grande(Buffer_txt);
 
 	//Imprimindo rajada
 	TelaLCD.setCursor(0,17);
 	TelaLCD.print("Rajada:");
-	TelaLCD.print(55);
+	TelaLCD.print((*dadosm).rajada); //Colocar os dados
 	TelaLCD.drawbitmap(55,17,kph,19,7,BLACK);
 
 	//Imprimindo pressao
 	TelaLCD.setCursor(0,25);
 	TelaLCD.print("Pressao:");
-	TelaLCD.print(pressao/100);
+	TelaLCD.print((*dadosm).pressao/100);
 	TelaLCD.drawbitmap(73,26,milibar,10,5,BLACK);
 
 	//Imprimindo dados solares

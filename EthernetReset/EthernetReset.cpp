@@ -95,7 +95,7 @@ uint8_t EthernetReset::check()
 					url++;
 				}
 				DBG(*url = '\0';)
-				url = http_req + 5;
+				url = http_req + 7;
 				_client.flush();
 				DBG(Serial.println(url);)
 				if(!strncmp(url, _path,strlen(_path))) {
@@ -106,6 +106,12 @@ uint8_t EthernetReset::check()
 					} else if(!strncmp(url,"dados", 5)) {
 						flag = 1;
 					}
+					 else if(!strncmp(url,"cam_on", 6)) {
+						flag = 2;
+					 }
+					 else if(!strncmp(url,"cam_off", 7)) {
+						flag = 3;
+					 }
 				} else stdResponce("Wrong path");
 				break;
 			}

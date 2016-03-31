@@ -22,8 +22,15 @@
         		-> Deploy em Timbuix, adicionado ajuste de angulo de biruta
         	v1.4 - 23/01/2015
         		-> Bateria nova, updates de rajadas e velocidade do vento filtrada.
+        	v2.0 - 01/02/2015
+        		-> Diversos updates, modularização do codigo.
+        			-> Sistema on_off camera
+        	v2.1 - 13/02/2015
+        		-> Bugfixes... Procurando algo que possa estar travando a estacao.
+        		-> Liga e desliga da camera automatico.
 
-
+        	v2.2 - 27/02/2015
+        		-> Modificado bootloader para proteger contra travamentos (add WDT )
 
  */
 
@@ -39,15 +46,15 @@
 
 int16_t le_angulo_biruta();
 void resposta_dados();
-uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente, float rajada);
+bool updateThingSpeak();
+long averagingFilter(long input);
 float retorna_max_vento(float *array, uint8_t n);
+
 //==========================================================================================================//
 //										VARIAVEIS GLOBAIS
 //==========================================================================================================//
 //extern HardwareSerial Serial;
 //LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-
-
 
 t_estados_wifi estado;
 t_estados_c estado_conectado = MEDINDO;
@@ -56,14 +63,8 @@ t_estados_c estado_conectado = MEDINDO;
 volatile long lastWindIRQ = 0;
 volatile byte windClicks = 0;
 
-float vel_vento;
-float umidade;
-float vbat,corrente_painel,vpainel;
+float vbat;
 float array_de_rajadas[(TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD)];
-float rajada;
-int16_t direcao_vento;
-long pressao = 101325;
-float temperatura;
 volatile uint8_t conta_erros,conta_inicializacoes_de_rede;
 volatile bool reset_check = false;
 uint8_t tensao_saida;
@@ -81,10 +82,11 @@ RTC_DS1307 rtc;
 File myFile;
 
 EthernetClient client; //Cliente de conexao
-EthernetReset reset(8080); //Servidor de reset externo.
+AuxServer aux_server(8080);
+//EthernetReset reset(8080); //Servidor de reset externo.
 //Enderecos IPs
-IPAddress ip_reporte(192, 168, 10, 111);
-IPAddress ip_upload_firmware(192, 168, 10, 110);
+IPAddress ip_reporte(192, 168, 10, 8);
+IPAddress ip_upload_firmware(192, 168, 10, 9);
 IPAddress dns_google(200,175,5,139);
 IPAddress gateway_x(192,168,10,1);
 IPAddress subnet(255,255,255,0);
@@ -94,7 +96,7 @@ byte  mac_update[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
 
 //Variaveis de tempo e delay
 //TODO Colocar na API do FreeRTOS
-unsigned long t_led,t_update_site,t_medicao;
+unsigned long t_led,t_update_site,t_medicao,t_update_ts;
 
 
 //==========================================================================================================//
@@ -107,12 +109,22 @@ void Task_power_management(void *arg)
 	for(;;)
 	{
 		//vbat = adc_10bits(10)*(5.0/1024)*0.180328;
-		corrente_painel = (analogRead(A9)*(5000.0/1024.0)-2500.0)*(1.0/110.0);
-		vpainel = analogRead(A10)*(5.0/1024.0)*5.511;
-		Serial.println();
-		Serial.print("VPainel=");
-		Serial.println(vpainel,1);
 
+//		dados_solares.corrente_painel = (averagingFilter(analogRead(A9))*(5000.0/1024.0)-2500.0)*(1.0/110.0);
+		dados_solares.corrente_painel = (analogRead(A9)*(5000.0/1024.0)-2500.0)*(1.0/110.0);
+		dados_solares.tensao_painel = averagingFilter(analogRead(A10))*(5.0/1024.0)*5.511;
+
+		if (aux_server.modo_cam == CAM_AUTO)
+		{
+			if((rtc.now().hour()>=6) && (rtc.now().hour()<18))
+			{
+				aux_server.liga_cam();
+			}
+			else
+			{
+				aux_server.desliga_cam();
+			}
+		}
 
 		//Fim da Task
 		WDT_Task_Power_Management.reset();
@@ -125,13 +137,13 @@ void Task_Anemometro(void* arg)
 	xLastWakeTime = xTaskGetTickCount();
 	for(;;)
 	{
-		direcao_vento = le_angulo_biruta();
-		vel_vento = vel_vento*FATOR_DE_FILTRAGEM_VENTO + windClicks *FATOR_DE_ANEMOMETRO*(1.0-FATOR_DE_FILTRAGEM_VENTO);
+		dados_metereologicos.direcao_vento = le_angulo_biruta();
+		dados_metereologicos.vel_vento = dados_metereologicos.vel_vento*FATOR_DE_FILTRAGEM_VENTO + windClicks *FATOR_DE_ANEMOMETRO*(1.0-FATOR_DE_FILTRAGEM_VENTO);
 		Serial.println();
 		Serial.print("VelVento = ");
-		Serial.print(vel_vento,1);
+		Serial.print(dados_metereologicos.vel_vento,1);
 		Serial.print("/");
-		Serial.println(direcao_vento);
+		Serial.println(dados_metereologicos.direcao_vento);
 		Serial.flush();
 
 		for (uint8_t i=1; i< (TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD);i++)
@@ -139,7 +151,7 @@ void Task_Anemometro(void* arg)
 			array_de_rajadas[i-1] = array_de_rajadas[i];
 		}
 		array_de_rajadas[((TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD)-1)] = windClicks *FATOR_DE_ANEMOMETRO;
-		rajada = retorna_max_vento(array_de_rajadas,(TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD));
+		dados_metereologicos.rajada = retorna_max_vento(array_de_rajadas,(TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD));
 
 		windClicks = 0; //Zera para a proxima contagem.
 //		rajada = retorna_max_vento(array_de_rajadas,3);
@@ -155,7 +167,7 @@ void Task_LCD(void *arg)
 	xLastWakeTime = xTaskGetTickCount();
 	for(;;)
 	{
-		  updateLCD(pressao,direcao_vento,vel_vento,corrente_painel,vpainel);
+		  updateLCD(&dados_metereologicos,dados_solares.corrente_painel,dados_solares.tensao_painel);
 		  TelaLCD.display();
 		  WDT_Task_LCD.reset();
 		  vTaskDelayUntil(&xLastWakeTime,T_UPDATE_LCD);
@@ -177,7 +189,6 @@ static void Task_LED(void* arg)
 		{
 			//Tudo ok pisque o led e limpe o WDT
 			LED = !LED;
-//			LED = SENSOR_VEL;
 			Serial.print(WDT_Task_POST.count);
 			Serial.flush();
 			wdt_reset();
@@ -189,9 +200,10 @@ static void Task_LED(void* arg)
 			Serial.flush();
 			grava_dados_SD("Reboot",rtc,myFile);
 			vTaskDelay(100);
+			wdt_disable();
 			cli();
-			wdt_enable(WDTO_1S);
-			for(;;) WIZNET_RST = 0;
+			wdt_enable(WDTO_2S);
+			while(1);
 		}
 		vTaskDelayUntil(&xLastWakeTime,500);
 	}
@@ -204,6 +216,7 @@ extern "C" {
 	}
 
 	volatile uint8_t ultimo_estado = 0;
+
 	void vApplicationTickHook()  //Usada para ler o estado do pino e contar os cliques.
 	{
 
@@ -221,20 +234,23 @@ static void Task_POST(void* arg)
 	conta_erros = 0;
 	for(;;)
 	{
-
-		// Check de Dados, servidor de reset e upload.
-		if (reset_check) {
-			if (reset.check() ==1)
-			{
-				resposta_dados();
-			}
-			if (reset._client) reset._client.stop();
+		/*
+		 *  SERVIDOR AUXILIDAR DE DADOS, FORNECE:
+		 *  		- INTERFACE DE RESET
+		 *  		- INTERFACE DE DADOS
+		 *  		- OFF e ON da CAMERA
+		 *  		- SET DE HORA E IP
+		 */
+		if (reset_check)  //Se estiver habilitado.
+		{
+			aux_server.check(&dados_metereologicos,&dados_solares);
 		}
 
 
 		if (conta_inicializacoes_de_rede <= 10)
 			{
 				WDT_Task_POST.reset(); //Previne uma zica brava.
+				_NOP();
 			}
 	#ifndef TESTES
 
@@ -246,7 +262,7 @@ static void Task_POST(void* arg)
 				Ethernet.begin(mac,ip_reporte,dns_google,gateway_x,subnet);
 				{
 					vTaskDelay(1000);
-					reset.begin();
+					aux_server.begin();
 					reset_check = true;
 //					conta_inicializacoes_de_rede = 0;
 					estado = CONECTADO;
@@ -269,35 +285,22 @@ static void Task_POST(void* arg)
 				if (millis() >= (T_UPDATE_VARIAVEIS+t_medicao))
 				{
 					t_medicao = millis();
-					bmp085.getPressure(&pressao);
-	//				pressao += 400;
+					bmp085.getPressure(&dados_metereologicos.pressao);
 					int32_t temp_temp=0;
 					bmp085.getTemperature(&temp_temp);
-					temperatura = temp_temp;
-					temperatura = temperatura/10.0;
-					Serial.println();
-					Serial.print("Temperatura =");
-					Serial.println(temperatura,1);
+					dados_metereologicos.temperatura = temp_temp;
+					dados_metereologicos.temperatura = dados_metereologicos.temperatura/10.0;
 	//				temperatura = 10.0;
 //					umidade = dht.readHumidity();
-					umidade = 60;
+					dados_metereologicos.umidade = 60;
 //					temperatura = dht.readTemperature();
-					direcao_vento = le_angulo_biruta();
-	#ifdef debug_serial
-					Serial.println(umidade,2);
-					Serial.println(temperatura,1);
-					Serial.println(pressao);
-					Serial.print("Vento =");
-					Serial.print(vel_vento);Serial.print('/');
-					Serial.println(direcao_vento);
-	#endif
 				}
 				if (millis() >= (T_UPDATE_SITE+t_update_site))
 				{
 					Serial.println("Estado_Tupd");
 					t_update_site = millis();
 					conta_erros++;
-					if (WunderWeather_posta_dados(vel_vento, direcao_vento,pressao,temperatura,umidade,vpainel,corrente_painel,rajada)==OK)
+					if (WunderWeather_posta_dados(&dados_metereologicos,dados_solares.tensao_painel,dados_solares.corrente_painel)==OK)
 					{
 						conta_erros = 0;
 						conta_inicializacoes_de_rede = 0;
@@ -314,6 +317,13 @@ static void Task_POST(void* arg)
 							grava_dados_SD("Reset int rede",rtc,myFile);
 						}
 				}
+				if (millis() >= (30000+t_update_ts))
+				{
+					if (updateThingSpeak()) conta_erros = 0;
+					t_update_ts = millis();
+				}
+
+
 
 			break; //Fim do estado CONECTADO
 
@@ -342,14 +352,17 @@ void setup()
 	wdt_disable();
 	wdt_reset();
 	wdt_enable(WDTO_8S);
-//	rtc.adjust(DateTime(__DATE__, "15:00:00"));
+
 	wdt_reset();
 	//delay(2000); //Delay de startup
 	Serial.begin(115200);
+
 	io_init();
+	LED = 1;
 	WIZNET_RST = 1;
+	CAM_PWR1 = 1;
+	CAM_PWR2 = 1;
 	adc_init_10b();
-	//lcd.init();                      // initialize the lcd
 
 
 	/*
@@ -361,17 +374,20 @@ void setup()
 	 * ========INICIALIZACOES============
 	 */
 	  wdt_reset();
+	  /*
+	   * TRECHO DE CODIGO QUE MUDA O IP.
+	   * NAO MANTER.
+	   */
+	  word port = 8081;
+	  NetEEPROM.writeNet(mac_update, ip_upload_firmware, gateway_x, subnet);
 	  estado = INICIALIZANDO_INT_REDE;
 	  interrupts(); //sei();
-	  dht.begin();
-	  bmp085.init();
-	  rtc.begin();
 
-	  portBASE_TYPE s1, s2,s3,s4,s5;
-//	  word port = 8081;
-//	  NetEEPROM.writeNet(mac_update, ip_upload_firmware, gateway_x, subnet);
+	  rtc.begin();
+	  aux_server._rtc = &rtc; //Apontanto o RTC para a classe.
 
 	   pinMode(10, OUTPUT); // Necessário p/ a interface SPI funcionar.
+	  TelaLCD.init(55);
 	  if (!SD.begin(CS_SDCARD)) {
 	    /*
 	     *TODO Incluir aqui rotina de falha de inicializacao do SD Card
@@ -382,6 +398,14 @@ void setup()
 	  myFile = SD.open(logname, FILE_WRITE);
 	  grava_dados_SD("POWER ON",rtc,myFile);
 
+	  portBASE_TYPE s1, s2,s3,s4,s5;
+
+	  dht.begin();
+	  bmp085.init();
+	  bmp085.setAltOffset(57000);
+
+	  Serial.println(" ");
+	  Serial.print("Init completo\r\n - Init do OS");
 	  // Task que vai piscar o LED
 	  s1 = xTaskCreate(Task_LED, NULL, configMINIMAL_STACK_SIZE, NULL, TASK_LED_PRIORITY, NULL);
 	  // Task que vai postar dados.
@@ -401,7 +425,6 @@ void setup()
 //	  delay(1000);
 	  Serial.println(F("OS Pronto para Despache"));
 
-	  TelaLCD.init(55);
 
 	  vTaskStartScheduler();
 	  Serial.println(F("Insufficient RAM"));
@@ -445,7 +468,7 @@ int16_t le_angulo_biruta()
 }
 
 
-uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float pressao,float temperatura,float umidade,float vpainel,float corrente, float rajada)
+uint8_t WunderWeather_posta_dados(ST_dados_metereologicos *dados_met,float vpainel,float corrente)
 {
 	//Conecta no site
 //	IPAddress ipx(192, 168, 0, 7);
@@ -453,7 +476,6 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 	uint8_t resultado_da_conexao;
 	client.clearWriteError();
 	client.stop();
-	char site[40];
 	if (realtime_turn)
 		resultado_da_conexao = client.connect("rtupdate.wunderground.com",80);
 	else
@@ -476,28 +498,28 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 
 	//Direcao do Vento
 	client.print(F("GET /weatherstation/updateweatherstation.php?ID=IESPRITO5&PASSWORD=andref&dateutc=now&winddir="));
-	client.print(direcao_vento);
+	client.print(dados_met->direcao_vento);
 
 	//Velocidade do Vento
 	client.print(F("&windspeedmph="));
-	client.print(vel_vento/1.6,1); //Conversao para mph, apenas um digito de precisao
+	client.print(dados_met->vel_vento/1.6,1); //Conversao para mph, apenas um digito de precisao
 
 	//Rajada do Vento
 	client.print(F("&windgustmph="));
-	client.print(rajada/1.6,1); //Conversao para mph, apenas um digito de precisao
+	client.print(dados_met->rajada/1.6,1); //Conversao para mph, apenas um digito de precisao
 
 	//Temperatura da estacao
 	client.print(F("&tempf="));
 	// Conversao Fahrenheit para Celsius -> °F = °C × 1, 8 + 32, temperatura vem x10 do BMP
-	client.print((temperatura*1.8 +32.0),2);
+	client.print((dados_met->temperatura*1.8 +32.0),2);
 
 	//Pressao Barometrica
 	client.print(F("&baromin="));
-	client.print(pressao*0.0295300586467*0.01,3);
+	client.print(dados_met->pressao*0.0295300586467*0.01,3);
 
 	//umidade
 	client.print(F("&humidity="));
-	client.print(umidade,2);
+	client.print(dados_met->umidade,2);
 
 	//Tensao do Painel Solar
 	client.print(F("&dewptf="));
@@ -539,32 +561,7 @@ uint8_t WunderWeather_posta_dados(float vel_vento, int16_t direcao_vento,float p
 	realtime_turn = !realtime_turn;
 	return OK;
 }
-void resposta_dados()
-{
-	reset._client.println(F("HTTP/1.1 200 OK"));
-	reset._client.println(F("Content-Type: text/html"));
-	reset._client.println(F("Connnection: close"));
-	reset._client.println();
-	reset._client.println(F("<!DOCTYPE HTML>"));
-	reset._client.println(F("<html>"));
-	reset._client.println(F("Dados:<br>Tensao do Painel:"));
-		reset._client.print(vpainel,2);
-		reset._client.print(F("<br>Corrente:"));
-		reset._client.print(corrente_painel,2);
-		reset._client.print(F("<br>Horario:"));
-		reset._client.print(rtc.now().hour());reset._client.print(":");
-		reset._client.print(rtc.now().minute());reset._client.print(":");
-		reset._client.print(rtc.now().second());
-		reset._client.print(F("<br>Vento:"));
-		reset._client.print(vel_vento,1);
-		reset._client.print(F(" / Direcao:"));
-		reset._client.print(direcao_vento);
-		reset._client.print(F("<br>Rajada (2 min):"));
-		reset._client.print(rajada,1);
-	reset._client.println(F("<br><br></html>"));
-	reset._client.flush();
-	reset._client.stop();
-}
+
 void resposta_log(EthernetClient &cliente)
 {
 
@@ -597,4 +594,61 @@ float retorna_max_vento(float *array, uint8_t n)
 		array++;
 	}
 	return max_temp;
+}
+bool updateThingSpeak()
+{
+//	    String postStr;
+//	           postStr +="&field1=";
+//	           postStr += String(dados_solares.tensao_painel);
+//	           postStr +="&field2=";
+//	           postStr += String(dados_solares.corrente_painel);
+
+	IPAddress ip_ts(184, 106, 153, 149);
+
+	client.clearWriteError();
+	client.stop();
+
+	  if (client.connect(ip_ts, 80)) //api.thingspeak.com nao funciona... vai saber.
+	  {
+//	    client.print(F("POST /update HTTP/1.1\n"));
+//	    client.print(F("Host: api.thingspeak.com\n"));
+//	    client.print(F("Connection: close\n"));
+//	    client.print(F("X-THINGSPEAKAPIKEY: 0VC2U7KAIGL5AWHS\n")); //API Key do Site
+//	    client.print(F("Content-Type: application/x-www-form-urlencoded\n"));
+//	    client.print(F("Content-Length:"));
+//	    client.print(postStr.length());
+//	    client.print(F("\n\n"));
+//	    client.print(postStr);
+
+	    client.print(F("GET /update?key=0VC2U7KAIGL5AWHS&field1="));
+	    	    client.print(dados_solares.tensao_painel,2);
+	    client.print(F("&field2="));
+	    	    client.print(dados_solares.corrente_painel,2);
+	    client.print(F("  HTTP/1.1\r\nHost: api.thingspeak.com\r\nConnection: close\r\n\r\n"));
+		//USAR O GET COMO É FEITO NO WUNDERGROUND É BEM MAIS FACIL
+		//NAO ESQUECER DE USAR A STRING IGUAL ESTA ABAIXO
+		//GET /update?key=0VC2U7KAIGL5AWHS&field1=-10.31&field2=-33.12  HTTP/1.1<CR><LF>Host: api.thingspeak.com<CR><LF>Connection: close<CR><LF><CR><LF>
+	    	if (client.find("Status: 200 OK"))
+	    	{
+	    	    return true;
+	    	}
+	    	else return false;
+
+	  }
+	  return false;
+}
+
+#define SAMPLES_ARR 8
+static long k[SAMPLES_ARR];
+long averagingFilter(long input) // moving average filter function
+{
+	long sum = 0;
+	for (int i = 0; i < SAMPLES_ARR; i++) {
+		k[i] = k[i+1];
+	}
+	k[SAMPLES_ARR - 1] = input;
+	for (int i = 0; i < SAMPLES_ARR; i++) {
+		sum += k[i];
+	}
+	return ( sum / SAMPLES_ARR ) ;
 }

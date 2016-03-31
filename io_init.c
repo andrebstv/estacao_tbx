@@ -19,6 +19,9 @@ void io_init(void)
 	//Reset do modulo Ethernet
 	DDRF |=(1<<PIN0);
 
+	//Modulo da Camera
+	DDRK |= (1<<PIN7) + (1<<PIN4);
+
 	//Pino do Anemometro
 	DDRG &= ~(1<<PIN0); //Direcao
 	PORTG |= (1<<PIN0); //Pullup
