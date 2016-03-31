@@ -26,6 +26,9 @@
 #include <NewEEPROM.h>
 #include <IPAddress.h>
 
+#define EEPROM_IMG_OK_VALUE  (0xEE)
+#define EEPROM_IMG_STAT ((uint8_t*)2)
+
 #define pgm_uchar(name)   static const unsigned char name[] PROGMEM
 
 #ifdef DEBUG

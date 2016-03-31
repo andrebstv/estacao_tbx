@@ -378,15 +378,18 @@ void setup()
 	   * TRECHO DE CODIGO QUE MUDA O IP.
 	   * NAO MANTER.
 	   */
-	  word port = 8081;
-	  NetEEPROM.writeNet(mac_update, ip_upload_firmware, gateway_x, subnet);
+//	  word port = 8081;
+//	  NetEEPROM.writeNet(mac_update, ip_upload_firmware, gateway_x, subnet);
+
+	  eeprom_update_byte(EEPROM_IMG_STAT,EEPROM_IMG_OK_VALUE); // Isso por algum motivo corrompe, entao vamos enganar o bootloader.
+
 	  estado = INICIALIZANDO_INT_REDE;
 	  interrupts(); //sei();
 
 	  rtc.begin();
 	  aux_server._rtc = &rtc; //Apontanto o RTC para a classe.
 
-	   pinMode(10, OUTPUT); // Necessário p/ a interface SPI funcionar.
+	   pinMode(10, OUTPUT); // Necessário p/ a iunterface SPI funcionar.
 	  TelaLCD.init(55);
 	  if (!SD.begin(CS_SDCARD)) {
 	    /*
@@ -610,24 +613,13 @@ bool updateThingSpeak()
 
 	  if (client.connect(ip_ts, 80)) //api.thingspeak.com nao funciona... vai saber.
 	  {
-//	    client.print(F("POST /update HTTP/1.1\n"));
-//	    client.print(F("Host: api.thingspeak.com\n"));
-//	    client.print(F("Connection: close\n"));
-//	    client.print(F("X-THINGSPEAKAPIKEY: 0VC2U7KAIGL5AWHS\n")); //API Key do Site
-//	    client.print(F("Content-Type: application/x-www-form-urlencoded\n"));
-//	    client.print(F("Content-Length:"));
-//	    client.print(postStr.length());
-//	    client.print(F("\n\n"));
-//	    client.print(postStr);
 
 	    client.print(F("GET /update?key=0VC2U7KAIGL5AWHS&field1="));
 	    	    client.print(dados_solares.tensao_painel,2);
 	    client.print(F("&field2="));
 	    	    client.print(dados_solares.corrente_painel,2);
 	    client.print(F("  HTTP/1.1\r\nHost: api.thingspeak.com\r\nConnection: close\r\n\r\n"));
-		//USAR O GET COMO É FEITO NO WUNDERGROUND É BEM MAIS FACIL
-		//NAO ESQUECER DE USAR A STRING IGUAL ESTA ABAIXO
-		//GET /update?key=0VC2U7KAIGL5AWHS&field1=-10.31&field2=-33.12  HTTP/1.1<CR><LF>Host: api.thingspeak.com<CR><LF>Connection: close<CR><LF><CR><LF>
+
 	    	if (client.find("Status: 200 OK"))
 	    	{
 	    	    return true;

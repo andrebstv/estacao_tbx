@@ -16,6 +16,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <avr/wdt.h>
+#include <avr/eeprom.h>
 
 //Perifericos especificos
 //#include "WireLib/Wire.h"
@@ -57,6 +58,8 @@ extern "C"{
 #define TASK_LED_PRIORITY (configMAX_PRIORITIES-3)
 #define TASK_POST_PRIORITY (configMAX_PRIORITIES-5)
 #define TASK_PWR_MANAGEMENT_PRIORITY (configMAX_PRIORITIES-4)
+
+#define VERSAO "2.3b"
 
 #define FATOR_DE_ANEMOMETRO 1.56
 #define FATOR_DE_FILTRAGEM_VENTO 0.85
