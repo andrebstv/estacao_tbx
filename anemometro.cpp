@@ -20,18 +20,21 @@
         		-> Bootloader e webreset funcionando.
         	v1.3 - 22/12/2015
         		-> Deploy em Timbuix, adicionado ajuste de angulo de biruta
-        	v1.4 - 23/01/2015
+        	v1.4 - 23/01/2016
         		-> Bateria nova, updates de rajadas e velocidade do vento filtrada.
-        	v2.0 - 01/02/2015
+        	v2.0 - 01/02/2016
         		-> Diversos updates, modularização do codigo.
         			-> Sistema on_off camera
-        	v2.1 - 13/02/2015
+        	v2.1 - 13/02/2016
         		-> Bugfixes... Procurando algo que possa estar travando a estacao.
         		-> Liga e desliga da camera automatico.
 
-        	v2.2 - 27/02/2015
+        	v2.2 - 27/02/2016
         		-> Modificado bootloader para proteger contra travamentos (add WDT )
-
+        	v2.3 - 17/05/2016
+        		-> Modificado bootloader para proteger contra travamentos (add WDT  de novo)
+		v2.3c - 26/06/2016
+        		-> Modificado horário de acendimento da lampada.
  */
 
 
@@ -68,11 +71,12 @@ float array_de_rajadas[(TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD)];
 volatile uint8_t conta_erros,conta_inicializacoes_de_rede;
 volatile bool reset_check = false;
 uint8_t tensao_saida;
+char logname[15];
 
 SOFT_WDT WDT_Task_POST(60*2);
 SOFT_WDT WDT_Task_Reset_server(10*2);
-SOFT_WDT WDT_Task_LCD(10*2);
-SOFT_WDT WDT_Task_Anemometro(10*2);
+SOFT_WDT WDT_Task_LCD(20*2);
+SOFT_WDT WDT_Task_Anemometro(20*2);
 SOFT_WDT WDT_Task_Power_Management(60*2);
 
 
@@ -85,11 +89,12 @@ EthernetClient client; //Cliente de conexao
 AuxServer aux_server(8080);
 //EthernetReset reset(8080); //Servidor de reset externo.
 //Enderecos IPs
-IPAddress ip_reporte(192, 168, 10, 8);
-IPAddress ip_upload_firmware(192, 168, 10, 9);
+IPAddress ip_reporte(192, 168, 2, 8);
+IPAddress ip_upload_firmware(192, 168, 2, 9);
 IPAddress dns_google(200,175,5,139);
-IPAddress gateway_x(192,168,10,1);
+IPAddress gateway_x(192,168,2,1);
 IPAddress subnet(255,255,255,0);
+IPAddress ip_wd(38, 102, 137, 157); // IP do weather wunderground.... por algum motivo DNS nao resolve bem.
 //MAC Address
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 byte  mac_update[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
@@ -111,19 +116,32 @@ void Task_power_management(void *arg)
 		//vbat = adc_10bits(10)*(5.0/1024)*0.180328;
 
 //		dados_solares.corrente_painel = (averagingFilter(analogRead(A9))*(5000.0/1024.0)-2500.0)*(1.0/110.0);
-		dados_solares.corrente_painel = (analogRead(A9)*(5000.0/1024.0)-2500.0)*(1.0/110.0);
+		dados_solares.corrente_painel = ((analogRead(A9)*(5000.0/1024.0)-2500.0)*(1.0/110.0) -0.4)*0.568;
 		dados_solares.tensao_painel = averagingFilter(analogRead(A10))*(5.0/1024.0)*5.511;
 
 		if (aux_server.modo_cam == CAM_AUTO)
 		{
-			if((rtc.now().hour()>=6) && (rtc.now().hour()<18))
+			if((rtc.now().hour()>=9) && (dados_solares.tensao_painel >= 13.5) && (rtc.now().hour()<18))
 			{
 				aux_server.liga_cam();
 			}
-			else
+			else if ((dados_solares.tensao_painel <= 12.6) || (rtc.now().hour()>18))
 			{
 				aux_server.desliga_cam();
 			}
+		}
+		/*
+		 *  Mecanismo de criar um novo log na virada do dia.
+		 */
+		if((rtc.now().hour()==0) && (rtc.now().minute()==0) &&  (rtc.now().second()<15))
+		{
+			  myFile.flush();
+			  myFile.close();
+			  sprintf(logname,"%02d_%02d_%02d.txt",rtc.now().day(),rtc.now().month(),rtc.now().year()%100);
+			  myFile = SD.open(logname, FILE_WRITE);
+			  grava_dados_SD("Virada de Dia",rtc,myFile);
+			  WDT_Task_Power_Management.reset();
+			   vTaskDelayUntil(&xLastWakeTime,16000); //Para garantir que só vem uma vez.
 		}
 
 		//Fim da Task
@@ -139,12 +157,12 @@ void Task_Anemometro(void* arg)
 	{
 		dados_metereologicos.direcao_vento = le_angulo_biruta();
 		dados_metereologicos.vel_vento = dados_metereologicos.vel_vento*FATOR_DE_FILTRAGEM_VENTO + windClicks *FATOR_DE_ANEMOMETRO*(1.0-FATOR_DE_FILTRAGEM_VENTO);
-		Serial.println();
-		Serial.print("VelVento = ");
-		Serial.print(dados_metereologicos.vel_vento,1);
-		Serial.print("/");
-		Serial.println(dados_metereologicos.direcao_vento);
-		Serial.flush();
+//		Serial.println();
+//		Serial.print("VelVento = ");
+//		Serial.print(dados_metereologicos.vel_vento,1);
+//		Serial.print("/");
+//		Serial.println(dados_metereologicos.direcao_vento);
+//		Serial.flush();
 
 		for (uint8_t i=1; i< (TEMPO_MEDICAO_RAJADA/TASK_ANEMOMETRO_PERIOD);i++)
 		{
@@ -189,20 +207,22 @@ static void Task_LED(void* arg)
 		{
 			//Tudo ok pisque o led e limpe o WDT
 			LED = !LED;
-			Serial.print(WDT_Task_POST.count);
+			//Serial.print(WDT_Task_POST.count);
 			Serial.flush();
 			wdt_reset();
 		}
 		else
 		{
 			//Algo travou, reset geral
-			Serial.println(" WDT Reboot");
-			Serial.flush();
+			if (!WDT_Task_POST.check()) Serial.println("Reboot WDT_Task_POST");
+			if (!WDT_Task_Anemometro.check()) Serial.println("Reboot WDT_Task_Anemometro");
+			if (!WDT_Task_LCD.check()) Serial.println("Reboot WDT_Task_LCD");
+			if (!WDT_Task_Power_Management.check()) Serial.println("Reboot WDT_Task_Power_Management");
 			grava_dados_SD("Reboot",rtc,myFile);
 			vTaskDelay(100);
 			wdt_disable();
 			cli();
-			wdt_enable(WDTO_2S);
+			wdt_enable(WDTO_8S);
 			while(1);
 		}
 		vTaskDelayUntil(&xLastWakeTime,500);
@@ -380,14 +400,21 @@ void setup()
 	   */
 //	  word port = 8081;
 //	  NetEEPROM.writeNet(mac_update, ip_upload_firmware, gateway_x, subnet);
+	  //NetEEPROM.writePass("KH");
 
-	  eeprom_update_byte(EEPROM_IMG_STAT,EEPROM_IMG_OK_VALUE); // Isso por algum motivo corrompe, entao vamos enganar o bootloader.
+//	  eeprom_update_byte(EEPROM_IMG_STAT,EEPROM_IMG_OK_VALUE); // Isso por algum motivo corrompe, entao vamos enganar o bootloader.
 
 	  estado = INICIALIZANDO_INT_REDE;
 	  interrupts(); //sei();
 
 	  rtc.begin();
 	  aux_server._rtc = &rtc; //Apontanto o RTC para a classe.
+
+	  if (!rtc.isrunning())
+	  {
+		  Serial.println(F("RTC Not running, set on default"));
+		  rtc.adjust(DateTime(__DATE__, __TIME__));
+	  }
 
 	   pinMode(10, OUTPUT); // Necessário p/ a iunterface SPI funcionar.
 	  TelaLCD.init(55);
@@ -396,8 +423,7 @@ void setup()
 	     *TODO Incluir aqui rotina de falha de inicializacao do SD Card
 	     */
 	  }
-	  char logname[8];
-	  sprintf(logname,"L%u%u%u.txt",rtc.now().day(),rtc.now().month(),rtc.now().year()%100);
+	  sprintf(logname,"%02d_%02d_%02d.txt",rtc.now().day(),rtc.now().month(),rtc.now().year()%100);
 	  myFile = SD.open(logname, FILE_WRITE);
 	  grava_dados_SD("POWER ON",rtc,myFile);
 
@@ -410,12 +436,12 @@ void setup()
 	  Serial.println(" ");
 	  Serial.print("Init completo\r\n - Init do OS");
 	  // Task que vai piscar o LED
-	  s1 = xTaskCreate(Task_LED, NULL, configMINIMAL_STACK_SIZE, NULL, TASK_LED_PRIORITY, NULL);
+	  s1 = xTaskCreate(Task_LED, NULL, configMINIMAL_STACK_SIZE + 300, NULL, TASK_LED_PRIORITY, NULL);
 	  // Task que vai postar dados.
-	  s2 = xTaskCreate(Task_POST, NULL, 500, NULL, TASK_POST_PRIORITY, NULL);
-	  s3 = xTaskCreate(Task_Anemometro, NULL, configMINIMAL_STACK_SIZE, NULL, TASK_ANEMOMETRO_PRIORITY, NULL);
-	  s4 = xTaskCreate(Task_LCD, NULL, 500, NULL, TASK_LCD_PRIORITY, NULL);
-	  s5 = xTaskCreate(Task_power_management, NULL, configMINIMAL_STACK_SIZE, NULL, TASK_PWR_MANAGEMENT_PRIORITY, NULL);
+	  s2 = xTaskCreate(Task_POST, NULL, configMINIMAL_STACK_SIZE + 300, NULL, TASK_POST_PRIORITY, NULL);
+	  s3 = xTaskCreate(Task_Anemometro, NULL, configMINIMAL_STACK_SIZE + 300, NULL, TASK_ANEMOMETRO_PRIORITY, NULL);
+	  s4 = xTaskCreate(Task_LCD, NULL, configMINIMAL_STACK_SIZE + 300, NULL, TASK_LCD_PRIORITY, NULL);
+	  s5 = xTaskCreate(Task_power_management, NULL, configMINIMAL_STACK_SIZE + 300, NULL, TASK_PWR_MANAGEMENT_PRIORITY, NULL);
 	  //	  s2 = s3;
 
 
@@ -427,6 +453,16 @@ void setup()
 	  // start scheduler
 //	  delay(1000);
 	  Serial.println(F("OS Pronto para Despache"));
+	  WDT_Task_POST.reset();
+	  WDT_Task_Reset_server.reset();
+	  WDT_Task_LCD.reset();
+	  WDT_Task_Anemometro.reset();
+	  WDT_Task_Power_Management.reset();
+
+	  Serial.println(F("SOFTWDTs zerados"));
+	  Serial.print(F("Log Iniciado:"));
+	  Serial.println(logname);
+	  wdt_reset();
 
 
 	  vTaskStartScheduler();
@@ -480,10 +516,16 @@ uint8_t WunderWeather_posta_dados(ST_dados_metereologicos *dados_met,float vpain
 	client.clearWriteError();
 	client.stop();
 	if (realtime_turn)
-		resultado_da_conexao = client.connect("rtupdate.wunderground.com",80);
+	{
+		resultado_da_conexao = client.connect(ip_wd,80);
+//		Serial.print("Resposta DNS:");Serial.println(client.connect("rtupdate.wunderground.com",80));
+		//resultado_da_conexao = client.connect("rtupdate.wunderground.com",80);
+	}
 	else
-		resultado_da_conexao = client.connect("weatherstation.wunderground.com", 80);
-
+	{
+		resultado_da_conexao = client.connect(ip_wd, 80);
+//		resultado_da_conexao = client.connect("weatherstation.wunderground.com", 80);
+	}
 	if (resultado_da_conexao == OK)
 	{
 #ifdef debug_serial
@@ -630,7 +672,7 @@ bool updateThingSpeak()
 	  return false;
 }
 
-#define SAMPLES_ARR 8
+#define SAMPLES_ARR 4
 static long k[SAMPLES_ARR];
 long averagingFilter(long input) // moving average filter function
 {

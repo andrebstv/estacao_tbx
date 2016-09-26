@@ -41,7 +41,7 @@ void EthernetReset::watchdogReset()
 	_client.stop();
 	wdt_disable();
 	cli();
-	wdt_enable(WDTO_2S);
+	wdt_enable(WDTO_8S);
 	while(1);
 }
 

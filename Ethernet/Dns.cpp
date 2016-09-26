@@ -158,7 +158,7 @@ int DNSClient::getHostByName(const char* aHostname, IPAddress& aResult)
                         ret = TIMED_OUT;
                         while ((wait_retries < 3) && (ret == TIMED_OUT))
                         {
-                            ret = ProcessResponse(5000, aResult);
+                            ret = ProcessResponse(10000, aResult);
                             wait_retries++;
                         }
                     }

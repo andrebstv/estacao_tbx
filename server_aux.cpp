@@ -36,7 +36,7 @@ void AuxServer::check(ST_dados_metereologicos *dadosm, ST_dados_solares *dadosso
 				if(!strncmp(url, _path,strlen(_path))) {
 					url += (strlen(_path) + 1);
 					if(!strncmp(url, "reset", 5)) {
-						stdResponce("Estacao reiniciando em 2 segundos");
+						stdResponce("Estacao reiniciando em 8 segundos");
 						watchdogReset();
 					} else if(!strncmp(url,"dados", 5)) {
 							/*
@@ -52,7 +52,7 @@ void AuxServer::check(ST_dados_metereologicos *dadosm, ST_dados_solares *dadosso
 							/*
 							 * TENSAO DO PAINEL
 							 */
-							_client.println(F("Dados:<br>Tensao do Painel:"));
+							_client.println(F("Dados:<br>Tensao da Bateria:"));
 								_client.print(dadossol->tensao_painel,2);
 								_client.print(F("<br>Corrente:"));
 								_client.print(dadossol->corrente_painel,2);
