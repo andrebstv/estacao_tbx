@@ -35,11 +35,13 @@
         		-> Modificado bootloader para proteger contra travamentos (add WDT  de novo)
 		v2.3c - 26/06/2016
         		-> Modificado horário de acendimento da lampada.
+		v2.3d - 14/10/2016
+        		-> Modificado horário de acendimento da lampada.
+        	v2.3e - 12/02/2016
+        		-> Modificado IP a pedido Jânio.
+
+
  */
-
-
-
-
 
 #include "anemometro.h"
 
@@ -89,11 +91,12 @@ EthernetClient client; //Cliente de conexao
 AuxServer aux_server(8080);
 //EthernetReset reset(8080); //Servidor de reset externo.
 //Enderecos IPs
-IPAddress ip_reporte(192, 168, 2, 8);
-IPAddress ip_upload_firmware(192, 168, 2, 9);
-IPAddress dns_google(200,175,5,139);
-IPAddress gateway_x(192,168,2,1);
-IPAddress subnet(255,255,255,0);
+IPAddress ip_reporte(172, 21, 255, 8);
+IPAddress ip_upload_firmware(172, 21, 255, 9);
+IPAddress dns_google(8,8,8,8);
+IPAddress gateway_x(172,31,255,2);
+IPAddress subnet(255,255,252,0);
+
 IPAddress ip_wd(38, 102, 137, 157); // IP do weather wunderground.... por algum motivo DNS nao resolve bem.
 //MAC Address
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
@@ -125,7 +128,7 @@ void Task_power_management(void *arg)
 			{
 				aux_server.liga_cam();
 			}
-			else if ((dados_solares.tensao_painel <= 12.6) || (rtc.now().hour()>18))
+			else if ((dados_solares.tensao_painel <= 12.2) || (rtc.now().hour()>18))
 			{
 				aux_server.desliga_cam();
 			}

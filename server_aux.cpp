@@ -95,6 +95,13 @@ void AuxServer::check(ST_dados_metereologicos *dadosm, ST_dados_solares *dadosso
 								/*
 								 * FIM DO HEADER HTML
 								 */
+							_client.println(F("<hr>"));
+							_client.println(F("<br> Comandos no Header:<br>"));
+							_client.println(F("/cam_on/: liga a camera<br>"));
+							_client.println(F("/cam_off/: desliga a camera<br>"));
+							_client.println(F("/cam_auto/: Modo automatico<br>"));
+							_client.println(F("/adjhora/hh:mm/: seta a hora em hh:mm <br>"));
+							_client.println(F("/reset/: reboot depois de 8 segundos <br>"));
 							_client.println(F("<br><br></html>"));
 					}
 					/*
